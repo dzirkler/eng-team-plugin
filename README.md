@@ -43,8 +43,10 @@ Reload VS Code → Extensions view (`Ctrl+Shift+X`) → search `@agentPlugins`
 → you should see `sdd-engineering-team` listed → enable if not already.
 
 To use in a new project repo, no further setup is needed on the same
-machine — just open the project. The personas will appear in the agent
-dropdown (Agent mode), and `/speckit.*` slash commands become available.
+machine — just open the project. The 8 personas + 11 `speckit.*` pipeline
+agents will appear in the agent dropdown (Agent mode). The orchestrator
+invokes the speckit agents as subagents; you can also pick any speckit
+agent directly from the dropdown for ad-hoc work.
 
 ## Install (marketplace — for distributing to teammates or other machines)
 
@@ -57,7 +59,6 @@ See *Distributing the plugin* at the bottom of this README.
 | `plugin.json` | Plugin manifest (name, pointers to folders below) |
 | `agents/` | 8 persona agents (`*.agent.md`) + `speckit/` subdir with 11 pipeline agents |
 | `skills/` | 14 markdown skills (one `SKILL.md` per directory) |
-| `commands/` | 16 slash-command stubs (`speckit.*.prompt.md`) |
 | `hooks.json` | Runtime guardrail hooks |
 | `.mcp.json` | MCP server config (token-tracker, etc.) |
 | `scripts/` | Helper scripts (e.g. `no-op-guard.js`) |
@@ -140,32 +141,16 @@ consuming repo that adopts the SDD/spec-kit layout. Files that don't exist
 yet are simply skipped (the persona skills say "if the knowledge directory
 does not yet exist, skip this step and proceed").
 
-## Slash commands shipped
-
-`/speckit.constitution`, `/speckit.specify`, `/speckit.clarify`,
-`/speckit.plan`, `/speckit.tasks`, `/speckit.analyze`, `/speckit.implement`,
-`/speckit.checklist`, `/speckit.converge`, `/speckit.taskstoissues`,
-`/speckit.agent-context.update`, plus 6 git helpers (`/speckit.git.commit`,
-`/speckit.git.feature`, `/speckit.git.initialize`, `/speckit.git.remote`,
-`/speckit.git.validate`).
-
 ## Frontmatter convention
 
-Every `*.agent.md`, `*.prompt.md`, and `SKILL.md` file in this plugin carries
+Every `*.agent.md` and `SKILL.md` file in this plugin carries
 a `pluginSource: sdd-engineering-team` field in its YAML frontmatter. This is
 provenance metadata — it helps you identify which files came from this plugin
 versus your own repo-scoped customizations when diffing or upgrading.
 
 ## Known caveats
 
-1. **Command stubs are minimal.** The 16 `commands/*.prompt.md` files are
-   3-line shells (`---/agent: speckit.X/---`). They depend on the plugin
-   host resolving `agent:` references to invoke the matching agent
-   definition. If slash commands don't fire as expected, replace each stub
-   with inline prompt text (the matching `speckit/*.agent.md` body is the
-   source of truth and can be lifted verbatim into the prompt file).
-
-2. **Hook persona detection is best-effort.** The runtime guard script
+1. **Hook persona detection is best-effort.** The runtime guard script
    (`scripts/no-op-guard.js`) blocks `Edit`/`Write` for the orchestrator,
    debugger, and QA analyst personas — but only when it can identify the
    active persona. Currently it checks `SDD_PERSONA` env var or the hook
