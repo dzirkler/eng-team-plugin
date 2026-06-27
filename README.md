@@ -54,14 +54,19 @@ See *Distributing the plugin* at the bottom of this README.
 
 ## Bundle layout
 
+This plugin uses the **Claude format** (`.claude-plugin/plugin.json` at the
+format-specific manifest location) so VS Code expands the `${CLAUDE_PLUGIN_ROOT}`
+token in hook commands and MCP server config. Without that, plugin-provided
+hooks can't reference their own scripts portably.
+
 | Path | Contents |
 |------|----------|
-| `plugin.json` | Plugin manifest (name, pointers to folders below) |
+| `.claude-plugin/plugin.json` | Plugin manifest (name, pointers to folders below) |
 | `agents/` | 8 persona agents (`*.agent.md`) + `speckit/` subdir with 11 pipeline agents |
 | `skills/` | 14 markdown skills (one `SKILL.md` per directory) |
-| `hooks.json` | Runtime guardrail hooks |
-| `.mcp.json` | MCP server config (token-tracker, etc.) |
-| `scripts/` | Helper scripts (e.g. `no-op-guard.js`) |
+| `hooks/hooks.json` | Runtime guardrail hooks (Claude-format location) |
+| `.mcp.json` | MCP server config (zai-vision, zai-web-search, playwright) |
+| `scripts/` | Helper scripts (`no-op-guard.js`, `pm-dashboard-loop.ps1`, `.Tests.ps1`) |
 
 ## Optional integrations
 
