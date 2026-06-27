@@ -1,13 +1,5 @@
 {
   "mcpServers": {
-    "memory": {
-      "command": "npx",
-      "args": ["-y", "@mem0/mcp-server"],
-      "env": {
-        "MEM0_API_KEY": "${MEM0_API_KEY}",
-        "MEM0_BASE_URL": "${MEM0_BASE_URL:-http://localhost:8050}"
-      }
-    },
     "zai-vision": {
       "command": "npx",
       "args": ["-y", "@z_ai/mcp-server@latest"],
