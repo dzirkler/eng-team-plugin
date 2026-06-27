@@ -105,7 +105,7 @@ Before any SDD stages begin, delegate to `project-manager` to set up the feature
 3. **Seed the scaffolding commit** (REQUIRED — do not skip): create `specs/<NNN>-<slug>/.gitkeep` and commit it with message `chore(spec-<NNN>): scaffold spec directory`. This makes `head != base` so the draft PR can be created. GitHub rejects `gh pr create` (even draft) on commit-identical branches with `GraphQL: No commits between main and <branch>`.
 4. **Create draft PR against main**: `gh pr create --draft --title "<feature name>" --base main`
 5. **Report the PR URL** so the human approver can track progress
-6. **Open the token-tracker session** (skipped silently if `SDD_TEAM_ID` is unset — see *Token-Tracker Session Bracketing* below for the full rules and the graceful-fallback contract). Briefly: call `current_session(team="${env:SDD_TEAM_ID}")` first; if `open_session == null`, immediately call `start_session(team="${env:SDD_TEAM_ID}", key_alias="${env:SDD_TEAM_ID}", virtual_key="${env:SDD_TEAM_ID}", feature="<feature name>", spec_id="<NNN>")`. **This MUST happen before delegating any SDD stage** (e.g. before `product-manager` runs `speckit.constitution`) — otherwise the LLM calls in that stage won't be attributed to this feature's session.
+6. **Open the token-tracker session** (skipped silently if `SDD_TEAM_ID` is unset — see *Token-Tracker Session Bracketing* below for the full rules and the graceful-fallback contract). Briefly: call `current_session(team="<resolved SDD_TEAM_ID>")` first; if `open_session == null`, immediately call `start_session(team="<resolved SDD_TEAM_ID>", key_alias="<resolved SDD_TEAM_ID>", virtual_key="<resolved SDD_TEAM_ID>", feature="<feature name>", spec_id="<NNN>")`. **You MUST substitute the actual env-var value** for `<resolved SDD_TEAM_ID>` before invoking — do not pass the literal placeholder string. **This MUST happen before delegating any SDD stage** (e.g. before `product-manager` runs `speckit.constitution`) — otherwise the LLM calls in that stage won't be attributed to this feature's session.
 
 **Alternative sequencing** (acceptable, slightly less visible): defer steps 3-4 until after the Constitution stage commits real artifacts, then create the draft PR from a non-empty branch. Either path is fine — what is NOT okay is creating a branch with no commits and trying to open a PR on it.
 
@@ -323,11 +323,13 @@ After an effort reaches its terminal state — for SDD: post-Checkpoint-3 approv
 1. **Produce a human-hour estimate for the run.** Aggregate the effort a single senior full-stack engineer would have spent to deliver the same outcome unaided: artifact authoring (spec.md, clarifications.md, plan.md, tasks.md, analyze-report.md), architectural decisions / spikes, code implementation with TDD, test authoring, QE validation, debugging / issue-fix loops, reviews (including external-review resolution), retrospective + cleanup. Break it down by major workstream to make the total defensible, and present the final figure (with breakdown) to the human approver before calling `close_session`. **Do NOT accept the literal clock-time** (AI runs in minutes what humans take days for); produce a sober, no-padding engineering estimate. **Make this estimate table a standard wrap-up deliverable — owners explicitly reporting "wrap up" expect to see it.** If the owner overrides with their own estimate, use theirs. Keep the table in the wrap-up message so it lives in chat history alongside the close-session call.
 2. **Call `close_session`**: ```text
 close_session(
-  team="${env:SDD_TEAM_ID}",
+  team="<resolved SDD_TEAM_ID>",
   estimate_hours=<real number from owner override, else the aggregated estimate>,
   notes="<optional; record failure mode if this is a failed-run close>"
 )
 ```
+
+(Resolve `SDD_TEAM_ID` to its actual value before constructing this call.)
 3. **On failure runs**, still close — failed runs have real token cost and are first-class data. Record the failure mode (e.g. `"aborted at Checkpoint 1: spec rejected"`) in `notes`.
 4. **On `no_open_session` error**: the session was never opened or was already closed — investigate before retrying; do not silently re-call `start_session` then `close_session` to "balance the books."
 5. **On `invalid_estimate_hours`**: re-prompt the operator for a valid number. The session remains open until a valid close succeeds.
@@ -360,51 +362,45 @@ repo declares its own team ID in `.vscode/settings.json`:
 "terminal.integrated.env.windows": { "SDD_TEAM_ID": "your-team-name" }
 ```
 
-**Graceful-missing behaviour (load-bearing).** Before any token-tracker
-call, check whether the `token-tracker` MCP service AND `SDD_TEAM_ID` are
-both available:
-- If `SDD_TEAM_ID` is unset or empty, OR the `token-tracker` MCP tools
-  are not registered: **skip all token-tracker calls** for this effort.
-  No error, no warning, no substitute. The rest of the workflow proceeds
-  identically. Attribution is a backend concern, not a functionality gate.
-- If both are available: use the env-var value as the team ID for every
-  call below (it is the confirmed deployment alias, NOT a secret).
+**Critical: resolve the env var to its actual value before calling token-tracker tools.**
+The `team`, `key_alias`, and `virtual_key` parameters expect the *resolved*
+value (e.g. `socialcampaignmanager`, `acme-platform`), NOT the literal
+string `${env:SDD_TEAM_ID}`. Templates below use the placeholder
+`<resolved SDD_TEAM_ID>` to make this explicit — when reading those templates,
+substitute the variable's current value before constructing the tool call.
 
-This graceful fallback is why the plugin ships with `token-tracker` calls
-in the templates despite the service being optional.
-
-### Configuration (env-var-driven)
-
-The team identifier is read from the **`SDD_TEAM_ID` environment variable** —
-never hardcoded. This keeps the plugin generic across consumers; each
-repo declares its own team ID in `.vscode/settings.json`:
-
-```jsonc
-"terminal.integrated.env.windows": { "SDD_TEAM_ID": "your-team-name" }
+**Worked example.** If `SDD_TEAM_ID=socialcampaignmanager`, then a call
+goes out as:
+```text
+current_session(team="socialcampaignmanager")
 ```
+NOT as `current_session(team="${env:SDD_TEAM_ID}")`. Substituting the
+shell-style placeholder verbatim is a bug — it produces a session for a
+team named after the literal placeholder.
 
 **Graceful-missing behaviour (load-bearing).** Before any token-tracker
 call, check whether the `token-tracker` MCP service AND `SDD_TEAM_ID` are
-both available:
+both available. To check the env-var value, use any tool that resolves
+environment variables (e.g. the shell `echo $SDD_TEAM_ID` on POSIX or
+`echo %SDD_TEAM_ID%` on Windows; or read it via `process.env` in Node).
+
 - If `SDD_TEAM_ID` is unset or empty, OR the `token-tracker` MCP tools
   are not registered: **skip all token-tracker calls** for this effort.
-  No error, no warning, no substitute. The rest of the workflow proceeds
+  No error, no warning, no substitute. Do NOT invent a team id. Do NOT
+  memorize one to substitute later. The rest of the workflow proceeds
   identically. Attribution is a backend concern, not a functionality gate.
-- If both are available: use the env-var value as the team ID for every
+- If both are available: use the resolved value as the team ID for every
   call below (it is the confirmed deployment alias, NOT a secret).
 
 This graceful fallback is why the plugin ships with `token-tracker` calls
 in the templates despite the service being optional.
 
-### Why
-
-All LLM calls this team makes route through the your inference proxy. A `token-tracker` MCP service records per-effort token spend. For the metric to be meaningful the session window must be opened before any LLM call and closed with a real engineer-hour estimate when the run ends. Agents are the **only** ones who know when a run begins/ends — the tracker cannot derive it post-hoc.
-
-### The contract (5 cases the instructions MUST produce)
-
-1. **Pre-flight check first.** Call `current_session(team="${env:SDD_TEAM_ID}")` at effort kickoff. If `open_session` is `null`, proceed to start. If non-null, **surface the conflict to the operator** (do NOT silently overwrite) — a leftover open session means a prior effort crashed without closing; the operator must decide whether to close it.
-2. **Open at kickoff, before any LLM-generating subagent.** Call `start_session(...)` at the branch-creation step — before delegating `product-manager` → `speckit.constitution` for SDD, or before delegating `debugger` / `full-stack-engineer` for a bugfix, chore, or hotfix. If you forget, the session is silently missing attribution for those LLM calls — there is no retroactive attribution.
-3. **Never silently overwrite an open session.** If `start_session` is called while one is open, the server returns `error: "session_already_open"` with the existing-session details in `existing_session`. **Surface those details to the operator.** Do not retry blindly.
+**Anti-pattern: do not persist the resolved value in memory.** If you
+find yourself about to call `store_memory()` or write to `.github/knowledge/`
+with content like "for this repo, SDD_TEAM_ID resolves to X" — stop.
+The env var is the source of truth; persisting its value creates drift
+if the value changes (new install, different machine, renamed team). Read
+the env var fresh each time.
 4. **Close with a real numeric engineer-hour estimate (even on failure).** Zero is acceptable (failed runs). Negative / NaN / infinite / placeholder values are forbidden — the server returns `error: "invalid_estimate_hours"` and the session stays open; re-prompt the operator for a valid number. Do not guess; do not use a placeholder like `-1` or `0.0 (TBD)`.
 5. **Always close, even on failure.** Failed runs have real token cost and are first-class data. When closing a failed run, record the failure mode in `notes`.
 
@@ -412,15 +408,15 @@ All LLM calls this team makes route through the your inference proxy. A `token-t
 
 ```text
 start_session(
-  team="${env:SDD_TEAM_ID}",
-  key_alias="${env:SDD_TEAM_ID}",
-  virtual_key="${env:SDD_TEAM_ID}",
+  team="<resolved SDD_TEAM_ID>",
+  key_alias="<resolved SDD_TEAM_ID>",
+  virtual_key="<resolved SDD_TEAM_ID>",
   feature="[category] <human-readable name>",
   spec_id="<NNN> for SDD, or branch-slug e.g. 'fix/<branch-slug>' for non-SDD"
 )
 ```
 
-The `${env:SDD_TEAM_ID}` value is used for all three of `team` / `key_alias` / `virtual_key` — it is the confirmed deployment alias for this consuming repo, NOT a secret (no `vk-…` key value to embed).
+The resolved `SDD_TEAM_ID` value is used for all three of `team` / `key_alias` / `virtual_key` — it is the confirmed deployment alias for this consuming repo, NOT a secret (no `vk-…` key value to embed). **Read the env var fresh on each call; do not persist the resolved value in memory or knowledge files** (see *Configuration* anti-pattern above).
 
 ### Categories (the `[category]` prefix on `feature`)
 
@@ -441,18 +437,22 @@ Examples:
 ### Pre-flight template (run before every start)
 
 ```text
-current_session(team="${env:SDD_TEAM_ID}")
+current_session(team="<resolved SDD_TEAM_ID>")
 ```
+
+(Resolve `SDD_TEAM_ID` to its actual value before constructing this call.)
 
 ### Close template
 
 ```text
 close_session(
-  team="${env:SDD_TEAM_ID}",
+  team="<resolved SDD_TEAM_ID>",
   estimate_hours=<real number; 0 acceptable for failed runs; ask operator if unknown>,
   notes="<optional; record failure mode if this is a failed-run close>"
 )
 ```
+
+(Resolve `SDD_TEAM_ID` to its actual value before constructing this call.)
 
 ### Close timing (deliberate owner choice)
 
@@ -464,7 +464,7 @@ The session close happens at the **very end** of the effort lifecycle — post-m
 |------|------|------------|
 | `session_already_open` | `start_session` called with an existing open session for this team | Surface the `existing_session` details (`team`, `spec_id`, `feature`, `started_at`) to the operator. Do not overwrite. |
 | `no_open_session` | `close_session` called when nothing is open | Indicates a logic bug or a prior close — investigate, do not retry blindly. |
-| `team_required` | `team` value missing because `SDD_TEAM_ID` env var was unset at the moment of the call | Should not happen if the *Configuration* pre-check ran (the orchestrator skips token-tracker entirely when `SDD_TEAM_ID` is unset). If it fires anyway, surface and re-check the consumer's `.vscode/settings.json`. |
+| `team_required` | The `team` value was the literal placeholder string `<resolved SDD_TEAM_ID>` (not substituted), or the env var was unset | Most likely the orchestrator passed the template verbatim without resolving. Surface the error to the operator and re-check the consumer's `.vscode/settings.json` — `SDD_TEAM_ID` should be set there. |
 | `invalid_estimate_hours` | `estimate_hours` is negative, NaN, or infinite | Session remains open. Re-prompt the operator for a valid number; never substitute a placeholder. |
 
 ---
