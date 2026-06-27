@@ -1,0 +1,18 @@
+{
+  "name": "sdd-engineering-team",
+  "description": "Spec-Driven Development engineering team: an orchestrator plus seven specialist personas (product, project, full-stack engineer, quality engineer, QA analyst, debugger, UX designer) and an eleven-agent speckit generation pipeline. Ships with reusable skills, slash commands, MCP server config, and runtime guardrail hooks.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Damon",
+    "url": "https://github.com/damork"
+  },
+  "homepage": "https://github.com/damork/sdd-engineering-team",
+  "license": "MIT",
+  "keywords": ["sdd", "spec-driven", "engineering-team", "agents", "orchestrator", "copilot", "speckit"],
+  "category": "productivity",
+  "agents": "agents/",
+  "skills": "skills/",
+  "commands": "commands/",
+  "hooks": "hooks.json",
+  "mcpServers": ".mcp.json"
+}

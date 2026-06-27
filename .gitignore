@@ -1,0 +1,19 @@
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# Hook debug log (only written when SDD_GUARD_DEBUG=1)
+.sdd-guard.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node (only if we add tooling later)
+node_modules/
