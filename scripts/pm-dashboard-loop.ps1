@@ -21,7 +21,34 @@ param(
     # the parse disagrees with feature.initialTaskCount. Task-count
     # reconciliation at launch is load-bearing verification, not ceremony.
     [switch]$SelfTest,
-    [string]$SelfTestTasksMd
+    [string]$SelfTestTasksMd,
+
+    # -ResumeSupervisor: Layer 3 (quota-block wake) — see
+    # docs/resume-signal-contract.md and Quota-Block-Resilience-Plan.md §6.
+    # Instead of rendering the dashboard, polls for a resume-signal.json
+    # written by the (external, non-LLM) Layer 2 reset-time capture code,
+    # waits until reset_at + buffer, then surfaces a one-click resume
+    # (writes a ready-state file + best-effort opens the repo). Does NOT
+    # itself relaunch the LLM — that stays a human (or scheduler) action.
+    [switch]$ResumeSupervisor,
+    # Path to the resume signal, relative to -RepoRoot unless rooted.
+    # Matches the location proposed in Quota-Block-Resilience-Plan.md §4.
+    [string]$ResumeSignalPath = ".specify\state\resume-signal.json",
+    # Where the supervisor writes the "ready to resume" surface, relative to
+    # -RepoRoot unless rooted. A dashboard/notifier can watch this file.
+    [string]$ResumeReadyFile = ".github\status\resume-ready.json",
+    # Clock-skew / quota-release-lag buffer added after reset_at before
+    # surfacing resume-ready (open item in the resilience plan §9).
+    [int]$ResumeBufferSeconds = 120,
+    # Poll cadence while waiting for the signal to appear / for reset_at to pass.
+    [int]$ResumePollSeconds = 30,
+    # 0 = run indefinitely (true supervisor). Non-zero bounds the run for
+    # ad-hoc/CI invocations.
+    [int]$ResumeTimeoutMinutes = 0,
+    # Best-effort: after surfacing resume-ready, try to open the repo in VS
+    # Code (`code <RepoRoot>`) so the human has a one-click path in. Silently
+    # skipped if `code` isn't on PATH — never fatal.
+    [switch]$ResumeOpenRepo
 )
 
 $ErrorActionPreference = "Stop"
@@ -199,11 +226,12 @@ function Parse-TasksMd($path) {
             $collectingTasks = $true
             continue
         }
-        # H2 phase-with-colon form: ## Phase N: name
-        # (also tolerate ## Phase N (name) and ## Phase N — name variants
-        # at H2 for robustness; the existing em-dash-on-H3 logic keeps the
-        # em-dash H3 form working too.)
-        $h2PhaseColonMatch = [regex]::Match($line, '^##\s+Phase\s+(\d+)\s*[:：]\s*(?:(.+?)\s*)?$')
+        # H2 phase form: ## Phase N: name (colon), ## Phase N：name (full-width colon),
+        # ## Phase N — name (em-dash), or ## Phase N - name (hyphen). The em-dash/hyphen
+        # variants are required because the comment historically claimed "tolerate
+        # ## Phase N — name variants at H2 for robustness" but the regex only had colons
+        # in the character class (spec 022-style headers returned 0 tasks; fixed here).
+        $h2PhaseColonMatch = [regex]::Match($line, '^##\s+Phase\s+(\d+)\s*[:：—-]\s*(?:(.+?)\s*)?$')
         if ($h2PhaseColonMatch.Success) {
             $phaseName = if ($h2PhaseColonMatch.Groups[2].Success) { $h2PhaseColonMatch.Groups[2].Value.Trim() } else { "Phase $($h2PhaseColonMatch.Groups[1].Value)" }
             $currentPhase = @{ index = [int]$h2PhaseColonMatch.Groups[1].Value; kind = "phase"; name = $phaseName; tasks = @() }
@@ -1522,6 +1550,151 @@ function Render-Dashboard($feature, $agentStatuses) {
 "@
 
     return $dashboardHtml
+}
+
+<#
+    Resume-Supervisor (Layer 3 — Wait & Relaunch)
+
+    Non-LLM watcher loop. Per Quota-Block-Resilience-Plan.md §2/§6, the LLM
+    never waits and never reasons about a reset timestamp — that is this
+    loop's whole job. It does three things, in order, repeating forever
+    (unless -ResumeTimeoutMinutes bounds it):
+
+      1. Poll for a resume-signal.json (written externally by the Layer 2
+         reset-time capture — inference proxy or harness wrapper; NOT by
+         this script and NOT by any agent). Absence is the normal state.
+      2. Once found, sleep until reset_at + -ResumeBufferSeconds has passed.
+      3. Surface "ready to resume": write -ResumeReadyFile with the
+         resume_command + timing, print a console banner, and (if
+         -ResumeOpenRepo) best-effort open the repo so a human has a
+         one-click path back in.
+
+    After surfacing, it deletes its own in-memory "armed" state and goes
+    back to polling for the NEXT signal (a human or scheduler consuming the
+    ready-file is expected to remove/replace resume-signal.json once the
+    relaunch actually happens; if it's still present next poll, this loop
+    treats it as the same still-unconsumed signal and re-surfaces rather
+    than re-waiting from scratch — safe because surfacing is idempotent).
+#>
+function Invoke-ResumeSupervisor {
+    param(
+        [string]$SignalPathFull,
+        [string]$ReadyFileFull,
+        [int]$BufferSeconds,
+        [int]$PollSeconds,
+        [int]$TimeoutMinutes,
+        [switch]$OpenRepo,
+        [string]$RepoRootForOpen
+    )
+
+    Write-Host "Resume-Supervisor started (Layer 3 — quota-block wake)."
+    Write-Host "  Watching:    $SignalPathFull"
+    Write-Host "  Ready file:  $ReadyFileFull"
+    Write-Host "  Buffer:      ${BufferSeconds}s after reset_at"
+    Write-Host "  Poll every:  ${PollSeconds}s"
+    if ($TimeoutMinutes -gt 0) { Write-Host "  Timeout:     ${TimeoutMinutes}m" } else { Write-Host "  Timeout:     none (runs indefinitely)" }
+    Write-Host ""
+
+    $startTime = Get-Date
+    $timeoutSeconds = $TimeoutMinutes * 60
+    $lastSurfacedSignature = $null
+
+    while ($true) {
+        if ($TimeoutMinutes -gt 0) {
+            $elapsed = ((Get-Date) - $startTime).TotalSeconds
+            if ($elapsed -gt $timeoutSeconds) {
+                Write-Host "Resume-Supervisor timeout reached (${TimeoutMinutes}m). Exiting."
+                return
+            }
+        }
+
+        $signal = Read-JsonFile $SignalPathFull
+        if (-not $signal) {
+            Start-Sleep -Seconds $PollSeconds
+            continue
+        }
+
+        # Signature de-dupes repeated surfacing of the identical signal
+        # (e.g. supervisor restarted after already surfacing once).
+        $signature = "$($signal.feature)|$($signal.reset_at)|$($signal.created_at)"
+
+        $resetAt = ConvertTo-UtcDateTime $signal.reset_at
+        if (-not $resetAt) {
+            Write-Host "WARNING: resume-signal.json found but reset_at is missing/unparseable. Ignoring until it's fixed." -ForegroundColor Yellow
+            Start-Sleep -Seconds $PollSeconds
+            continue
+        }
+
+        $wakeAt = $resetAt.AddSeconds($BufferSeconds)
+        $now = [DateTime]::UtcNow
+
+        if ($now -lt $wakeAt) {
+            $remaining = [int]([Math]::Ceiling(($wakeAt - $now).TotalSeconds))
+            $ts = (Get-Date).ToUniversalTime().ToString("HH:mm:ss")
+            Write-Host "[$ts] Blocked-quota signal for '$($signal.feature)' — reset_at=$($signal.reset_at), waking in ${remaining}s (buffer=${BufferSeconds}s)"
+            Start-Sleep -Seconds ([Math]::Min($PollSeconds, [Math]::Max(1, $remaining)))
+            continue
+        }
+
+        if ($signature -eq $lastSurfacedSignature -and (Test-Path $ReadyFileFull)) {
+            # Already surfaced this exact signal and the ready-file still
+            # exists (nobody has consumed/cleared it yet) — nothing new to do.
+            Start-Sleep -Seconds $PollSeconds
+            continue
+        }
+
+        # --- Surface resume-ready ---
+        $readyPayload = [ordered]@{
+            feature         = $signal.feature
+            branch          = $signal.branch
+            reason          = $signal.reason
+            reset_at        = $signal.reset_at
+            created_at      = $signal.created_at
+            resume_command  = $signal.resume_command
+            surfaced_at     = (Get-Date).ToUniversalTime().ToString("o")
+            bufferSeconds   = $BufferSeconds
+        }
+        $readyDir = Split-Path -Parent $ReadyFileFull
+        if ($readyDir -and -not (Test-Path $readyDir)) { New-Item -ItemType Directory -Path $readyDir -Force | Out-Null }
+        $tempReady = "$ReadyFileFull.tmp"
+        ($readyPayload | ConvertTo-Json -Depth 5) | Out-File -FilePath $tempReady -Encoding UTF8 -NoNewline
+        Move-Item -Path $tempReady -Destination $ReadyFileFull -Force
+
+        Write-Host ""
+        Write-Host "=== RESUME READY ===" -ForegroundColor Green
+        Write-Host "  Feature:  $($signal.feature)"
+        Write-Host "  Branch:   $($signal.branch)"
+        Write-Host "  Reason:   $($signal.reason)"
+        Write-Host "  reset_at: $($signal.reset_at) (+ ${BufferSeconds}s buffer elapsed)"
+        Write-Host "  Command:  $($signal.resume_command)"
+        Write-Host "  Ready file written: $ReadyFileFull"
+        Write-Host "====================" -ForegroundColor Green
+        Write-Host ""
+
+        if ($OpenRepo) {
+            try {
+                $codeCmd = Get-Command "code" -ErrorAction SilentlyContinue
+                if ($codeCmd) {
+                    Start-Process -FilePath $codeCmd.Source -ArgumentList @($RepoRootForOpen) -ErrorAction Stop
+                    Write-Host "Opened $RepoRootForOpen in VS Code."
+                } else {
+                    Write-Host "NOTE: 'code' CLI not found on PATH — skipping auto-open. Open the repo manually and run the resume_command above." -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "NOTE: failed to auto-open VS Code ($($_.Exception.Message)) — open the repo manually." -ForegroundColor Yellow
+            }
+        }
+
+        $lastSurfacedSignature = $signature
+        Start-Sleep -Seconds $PollSeconds
+    }
+}
+
+if ($ResumeSupervisor) {
+    $signalFull = if ([System.IO.Path]::IsPathRooted($ResumeSignalPath)) { $ResumeSignalPath } else { Join-Path $repoRoot $ResumeSignalPath }
+    $readyFull  = if ([System.IO.Path]::IsPathRooted($ResumeReadyFile)) { $ResumeReadyFile } else { Join-Path $repoRoot $ResumeReadyFile }
+    Invoke-ResumeSupervisor -SignalPathFull $signalFull -ReadyFileFull $readyFull -BufferSeconds $ResumeBufferSeconds -PollSeconds $ResumePollSeconds -TimeoutMinutes $ResumeTimeoutMinutes -OpenRepo:$ResumeOpenRepo -RepoRootForOpen $repoRoot
+    exit 0
 }
 
 # --- -SelfTest branch: parse the configured tasks.md and exit. Does NOT
