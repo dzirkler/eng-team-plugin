@@ -113,7 +113,7 @@ Write-Host "  Flagship model:  $FlagshipModel"
 Write-Host "  Cheap model:     $CheapModel"
 Write-Host ""
 
-# --- Required footprint: the 9 persona agent files (agents/*.agent.md, NOT
+# --- Required footprint: all persona agent files (agents/*.agent.md, NOT
 # --- the agents/speckit/ subfolder, which is optional glue). Persona files
 # --- are the ones that carry {{MODEL_FLAGSHIP}}/{{MODEL_CHEAP}} placeholders.
 $personaFiles = Get-ChildItem -Path $sourceAgentsDir -Filter "*.agent.md" -File

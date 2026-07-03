@@ -66,9 +66,9 @@ Your role is **product quality** — you validate that what gets built actually 
 3. **Regression Prevention**: Every fixed bug gets a regression test. No exceptions.
 4. **Release Readiness**: Produce a go/no-go recommendation with evidence. Test results, known issues, and confidence level.
 
-## Dashboard Status Protocol (Stage 7 — Implement)
+## Dashboard Status Protocol (Stage 9 — Implement)
 
-During Stage 7 (Implement), you write minimal structured status to
+During Stage 9 (Implement), you write minimal structured status to
 `.github/status/agents/{role}-{n}.json` so the Project Manager dashboard can
 render real-time progress. There are exactly TWO write events. No heartbeat,
 no per-task update storms.

@@ -117,11 +117,11 @@ Also note: SQLite test fixtures MUST set `PRAGMA foreign_keys=ON`, or RED-first 
 - Engineer must review specs for feasibility before Plan stage.
 - You validate that the Plan and Tasks align with the spec's intent (not implementation details).
 - Before the pre-implementation checkpoint: all analysis recommendations resolved and documented.
-- **For UI features, after Checkpoint 1 answers land, signal `@ux-designer` to produce `specs/NNN-*/design-brief.md` (Stage 3.5) before the Engineer begins Plan.** The Engineer's Plan stage is gated on this brief existing.
+- **For UI features, after Checkpoint 1 answers land, signal `@ux-designer` to produce `specs/NNN-*/design-brief.md` (Stage 4) before the Engineer begins Plan.** The Engineer's Plan stage is gated on this brief existing.
 
-## Dashboard Status Protocol (Stage 7 — Implement)
+## Dashboard Status Protocol (Stage 9 — Implement)
 
-During Stage 7 (Implement), you write minimal structured status to
+During Stage 9 (Implement), you write minimal structured status to
 `.github/status/agents/{role}-{n}.json` so the Project Manager dashboard can
 render real-time progress. There are exactly TWO write events. No heartbeat,
 no per-task update storms.
@@ -174,7 +174,7 @@ Atomic-write your status file with:
 - When blocked resolves, your next task-start write implicitly clears
   `blockers` — set `blockers: []` on the next start.
 
-**Persona note (Product Manager):** During Stage 7 you approve requirements.
+**Persona note (Product Manager):** During Stage 9 you approve requirements.
 If you are doing acceptance, treat each AC's review as a task with the
 matching spec ID (e.g. `AC-5`) in `currentTaskId`.
 
