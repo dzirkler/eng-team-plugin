@@ -24,10 +24,19 @@
 # Optional footprint switches (default: persona agents only):
 #   -IncludeSpeckit   also copies agents/speckit/* (the speckit.* glue agents)
 #   -IncludeSkills    also copies skills/*
-#   -IncludeHooks     also copies hooks/hooks.json
+#   -IncludeHooks     also copies hooks/hooks.json (REQUIRES -IncludeScripts
+#                     if you also want the referenced no-op-guard.js to land
+#                     at ${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js)
 #   -IncludeMcp       also copies .mcp.json (NOTE: does not inject secrets —
 #                     the target's own env vars / .vscode/settings.json still
 #                     supply ${ZAI_API_KEY} etc. at runtime)
+#   -IncludeScripts   also copies scripts/* — REQUIRED for any consumer that
+#                     runs the Stage-7 dashboard (pm-dashboard-loop.ps1 is
+#                     referenced by the orchestrator + project-manager
+#                     personas via ${CLAUDE_PLUGIN_ROOT}/scripts/... and
+#                     will be unresolvable at runtime without this). Also
+#                     ships no-op-guard.js (referenced by hooks.json) and
+#                     the dashboard's Pester regression suite.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -46,6 +55,7 @@ param(
     [switch]$IncludeSkills,
     [switch]$IncludeHooks,
     [switch]$IncludeMcp,
+    [switch]$IncludeScripts,
 
     # -WhatIf-style dry run: report what would change, write nothing.
     [switch]$DryRun
@@ -146,6 +156,33 @@ if ($IncludeSpeckit) {
     }
 }
 
+# --- Optional: scripts/  (dashboard + no-op-guard + Pester tests).
+# --- Copy each top-level file from the plugin's scripts/ dir to the target's
+# --- .github/scripts/.  Plain copy, no model placeholders to inject. We do
+# --- NOT recursively copy the directory itself (avoids creating an empty
+# --- .github/scripts/scripts/ if some future refactor adds a subdir) — we
+# --- enumerate files explicitly. Excludes this sync-agents.ps1 itself, since
+# --- it is plugin-internal plumbing and not part of the runtime footprint
+# --- referenced by personas, hooks, or skills.
+if ($IncludeScripts) {
+    $sourceScriptsDir = Join-Path $pluginRoot "scripts"
+    $targetScriptsDir = Join-Path $TargetRoot ".github\scripts"
+    if (Test-Path $sourceScriptsDir) {
+        Write-Host ""
+        Write-Host "Syncing scripts -> $targetScriptsDir"
+        if (-not (Test-Path $targetScriptsDir)) { New-Item -ItemType Directory -Path $targetScriptsDir -Force | Out-Null }
+        Get-ChildItem -Path $sourceScriptsDir -File | Where-Object { $_.Name -ne "sync-agents.ps1" } | ForEach-Object {
+            $dest = Join-Path $targetScriptsDir $_.Name
+            if ($DryRun) {
+                Write-Host "  [dry-run] would copy: $dest"
+            } else {
+                Copy-Item -Path $_.FullName -Destination $dest -Force
+                Write-Host "  wrote: $dest"
+            }
+        }
+    }
+}
+
 # --- Optional: skills/
 if ($IncludeSkills) {
     $sourceSkillsDir = Join-Path $pluginRoot "skills"
@@ -164,11 +201,21 @@ if ($IncludeSkills) {
 }
 
 # --- Optional: hooks/hooks.json
+# --- NOTE: hooks.json references ${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js
+# --- at runtime. That node script will be unresolvable unless the consumer
+# --- also passes -IncludeScripts (or otherwise installs no-op-guard.js at
+# --- <plugin-root>/scripts/). We warn here rather than hard-fail because
+# --- some consumers may supply no-op-guard.js from a different source.
 if ($IncludeHooks) {
     $sourceHooks = Join-Path $pluginRoot "hooks\hooks.json"
     $targetHooksDir = Join-Path $TargetRoot ".github\hooks"
     if (Test-Path $sourceHooks) {
         Write-Host ""
+        if (-not $IncludeScripts) {
+            Write-Host "WARNING: -IncludeHooks without -IncludeScripts — hooks.json references" -ForegroundColor Yellow
+            Write-Host "         `${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js which will not exist at runtime" -ForegroundColor Yellow
+            Write-Host "         unless no-op-guard.js is supplied separately. Recommend also passing -IncludeScripts." -ForegroundColor Yellow
+        }
         $dest = Join-Path $targetHooksDir "hooks.json"
         if ($DryRun) {
             Write-Host "  [dry-run] would copy: $dest"
