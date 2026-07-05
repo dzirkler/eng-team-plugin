@@ -50,6 +50,8 @@ You handle git commits inside feature branches during Implement. Your authorizat
 
 This protocol exists because a 5-hour quota block can end your session with zero warning and zero further LLM turns. Everything it needs must already be on disk from your *normal* successful work — there is no "handle the block" step for you to run.
 
+**Dispatch scope:** you are dispatched with an **assigned range** of tasks (typically one dependency chain, or one `[P]`-marked parallel-wave task — the orchestrator partitions `tasks.md` using `plan.md`). You loop through that range **internally**, in one dispatch — the per-task atomic protocol below runs at each task boundary *inside* this loop, not as a separate dispatch round. The orchestrator re-dispatches you only to (a) start a new parallel range, (b) hand off to `debugger`, or (c) resume after a quota block. Do not ask the orchestrator to re-dispatch you per task.
+
 ### Layer 1 — Durability (every task boundary, no exceptions)
 
 At every `tasks.md` task boundary, **atomically and before starting the next task**:

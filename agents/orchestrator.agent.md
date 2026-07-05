@@ -179,11 +179,27 @@ Full rules, the 5-case contract, error-code table, and templates live in *Token-
 - **Discretion-bearing questions are not soft.** When a clarification asks whether a safety or behavioral decision should be left to the assistant's discretion (e.g., "should the assistant confirm before X?"), the PM MUST frame it as Hard Rail (code-enforceable) vs Soft Guideline (tool-description-only) at Checkpoint 1. The owner decides — silently resolving as "tool-description-only" at Plan stage is a process violation. See `.github/agents/product-manager.agent.md` → "Clarify Stage — Model-Discretion Hard-vs-Soft Rule."
 - **If stuck or looping**, escalate to the human approver immediately.
 
-### Parallelization Rules
+### Dispatch Shape (Stage 9 — Implement)
 
-When tasks or stages have no dependencies on each other, launch multiple instances of the relevant persona(s) concurrently using the agent tool. For example: multiple Engineers for parallel implementation tasks, or an Engineer and a QE working simultaneously during Stage 9. Do not serialize work that can run in parallel.
+**One engineer dispatch executes an entire assigned range of `tasks.md`, not one task.** The implementation-engineer loops through its assigned tasks internally; the per-task atomic commit / `tasks.md` `[X]` mark / status-write protocol (see `implementation-engineer.agent.md` → Resilience Protocol Layer 1) runs *inside* that loop. It is **not** a per-task dispatch turn, and you do **not** re-dispatch the engineer after every task.
+
+**Partition `tasks.md` into ranges using `plan.md` (dependency graph + parallelization marks `[P]`)** — that's what the plan is for. The default partitioning is:
+
+- **One range per dependency chain** → one engineer dispatch owns the whole chain and loops through it sequentially. This is the default for any chain of dependent tasks (the common case). Do not split a dependency chain across multiple dispatches.
+- **One range per `[P]`-marked parallel wave** → one engineer dispatch *per task in the wave*, launched concurrently. The wave is the unit of parallelism, not the orchestrator's turn loop.
+
+Total dispatch count for Stage 9 should be roughly *(# of dependency chains in the critical path) + (sum of `[P]` wave widths)* — **not** `len(tasks.md)`. If you find yourself planning one dispatch per task, stop: you are off-policy.
+
+**Re-dispatch the engineer mid-stage only for:**
+1. **Parallel-range fan-out** — independent `[P]`-marked waves get separate concurrent dispatches.
+2. **Bug sub-delegation** — the engineer sub-delegates to `debugger` itself; you do not see this turn.
+3. **Post-quota-block resume** — see L130; one dispatch picks up from the first non-`[X]` task and continues the assigned range.
+
+**Parallel/non-Implement stages**: when tasks or stages have no dependencies on each other, launch multiple instances of the relevant persona(s) concurrently (e.g. an Engineer and a QE working simultaneously, or multiple Engineers on truly independent ranges). Do not serialize work that can run in parallel — but do not over-fan-out work that is naturally one chain either.
 
 ### Dashboard Launch Sequence (Stage 9 — Mandatory)
+
+**Read *Dispatch Shape (Stage 9 — Implement)* above before launching.** Stage 9 is *not* a one-dispatch-per-task loop; it is one engineer per dependency range (or per `[P]` wave, run concurrently). The PM's manifest should reflect *ranges* assigned to engineers, not one task per engineer slot.
 
 During the Implement stage, delegate to `project-manager` to launch a live dashboard so the human approver can monitor progress in real-time:
 
