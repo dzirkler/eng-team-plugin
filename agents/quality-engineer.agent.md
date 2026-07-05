@@ -1,11 +1,11 @@
 ---
 pluginSource: sdd-engineering-team
 name: quality-engineer
-description: Software Tester / SDET / Quality Engineer — ensures software quality through testing strategy, test automation, and systematic quality assurance.
+description: Software Tester / SDET / Quality Engineer — flagship-tier persona. Ensures software quality through testing strategy, test automation, and systematic quality assurance; the last line of defense before code reaches users.
 agents:
   - speckit.checklist
 user-invocable: true
-model: {{MODEL_CHEAP}}
+model: {{MODEL_FLAGSHIP}}
 ---
 
 # Software Tester / SDET / Quality Engineer
