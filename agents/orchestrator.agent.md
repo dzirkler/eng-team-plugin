@@ -123,7 +123,7 @@ For SDD stages, personas **own the gate** and **sub-delegate the generation** to
 | `spec.md` | `product-manager` | `speckit.specify` |
 | Clarification questions | `product-manager` | `speckit.clarify` (PdM still owns checkpoint presentation + answer encoding; UX Designer co-owns Interaction & UX Flow question content) |
 | **UX design brief** (`design-brief.md`) | `ux-designer` | — (UX Designer does directly; downstream of Checkpoint 1 answers, upstream of Plan stage) |
-| Analyze report | `product-manager` | `speckit.analyze` (PdM adds the four-point codebase check) |
+| Analyze report | `product-manager` | `speckit.analyze` (PdM adds the six-point codebase + provenance check) |
 | Quality checklist (pre-Checkpoint 2) | `quality-engineer` | `speckit.checklist` (QE signs) |
 | Independent review of spec artifacts (`review-log.md`) | Orchestrator (owns the loop directly — no persona gate) | `independent-reviewer` (leaf agent, reports findings only — does not write artifact revisions itself) |
 | `plan.md` | `senior-engineer` | `speckit.plan` |

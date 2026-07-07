@@ -16,7 +16,7 @@
 | 3 | **Design Brief** (UI features only) | `ux-designer` | (UX Designer authors directly — NOT an SDD speckit subagent) | `specs/<NNN-slug>/design-brief.md` | feature |
 | 4 | **Plan** | `senior-engineer` | `speckit.plan` | `specs/<NNN-slug>/plan.md` (+ `research.md`, `data-model.md`, `contracts/`, `quickstart.md`) | feature |
 | 5 | **Tasks** | `senior-engineer` | `speckit.tasks` | `specs/<NNN-slug>/tasks.md` | feature |
-| 6 | **Analyze** | `product-manager` | `speckit.analyze` (+ PdM four-point check) | `specs/<NNN-slug>/analyze-report.md` | feature |
+| 6 | **Analyze** | `product-manager` | `speckit.analyze` (+ PdM six-point codebase + provenance check) | `specs/<NNN-slug>/analyze-report.md` | feature |
 | 7 | **Checklist** (pre-Checkpoint 2) | `quality-engineer` | `speckit.checklist` | `specs/<NNN-slug>/checklists/*.md` | feature |
 | 8 | **Independent Review** | Orchestrator (loop) | `independent-reviewer` (leaf agent — findings only) | `specs/<NNN-slug>/review-log.md` | feature |
 | 9 | **Implement** | `implementation-engineer` | `speckit.implement` | source tree (per-task atomic commits) | feature |
@@ -41,7 +41,7 @@ Every SDD generation artifact flows through a persona gate:
 Orchestrator → Persona (owns gate) → speckit subagent (generates artifact)
 ```
 
-- **Persona owns the gate**: feasibility review, coverage check, four-point codebase check, presentation to human approver. The persona reviews the subagent's output and either accepts or re-dispatches with sharper instructions.
+- **Persona owns the gate**: feasibility review, coverage check, six-point codebase + provenance check, presentation to human approver. The persona reviews the subagent's output and either accepts or re-dispatches with sharper instructions.
 - **Subagent owns generation**: runs the speckit template resolution pipeline, fills placeholders, validates output. NEVER the persona.
 - **Persona NEVER writes the artifact itself** to "save a step" — that collapses the gate.
 - **Persona NEVER accepts a subagent artifact unseen** — that also collapses the gate.
