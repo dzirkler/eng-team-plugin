@@ -229,6 +229,48 @@ Behavior rules:
 
 Context for prioritization: $ARGUMENTS
 
+## Provenance Receipt (Mandatory)
+
+**This subagent MUST emit a provenance receipt before reporting completion.** Hand-authoring an artifact while skipping this receipt — or having the parent persona write the artifact — is the failure mode this receipt exists to detect. The orchestrator greps for it; absence means the stage did not run through speckit.
+
+### Receipt in the generated artifact (HTML comment)
+
+Prepend this HTML comment as the **very first line** of the generated artifact (before the document title):
+
+```markdown
+<!-- speckit:stage=<STAGE> | persona=<PARENT_PERSONA> | spec=<NNN-slug> | generated_at=<ISO 8601 UTC> | cli_version=<specify --version output, or "subagent"> -->
+```
+
+Field substitution:
+- `<STAGE>` — `constitution` | `specify` | `clarify` | `plan` | `tasks` | `analyze` | `checklist` | `implement` | `taskstoissues` (use the stage name matching THIS subagent)
+- `<PARENT_PERSONA>` — the persona that dispatched this subagent (`product-manager`, `senior-engineer`, `implementation-engineer`, `quality-engineer`, or `project-manager`). If invoked directly via slash command by the human approver, use `human`.
+- `<NNN-slug>` — the feature directory name (e.g. `029-essence-model`). For project-scoped artifacts (constitution), use `project`.
+- `<generated_at>` — current time in ISO 8601 with `Z` suffix: `(Get-Date).ToUniversalTime().ToString("o")`.
+- `<cli_version>` — output of `specify --version`. If unavailable, use the literal string `subagent`.
+
+For `constitution` stage only: the artifact lives at `.specify/memory/constitution.md` and is project-scoped — set `<NNN-slug>` to `project`. For artifacts under `specs/<NNN-slug>/`, use the feature's actual NNN-slug.
+
+### Sidecar ledger entry — append to `<feature_dir>/.speckit-provenance.json`
+
+Append one entry per stage execution to the ledger (create the file if absent, preserve existing entries):
+
+```json
+{
+  "stage": "<STAGE>",
+  "persona": "<PARENT_PERSONA>",
+  "spec": "<NNN-slug>",
+  "generated_at": "<ISO 8601 UTC>",
+  "cli_version": "<version or subagent>",
+  "artifact_path": "<relative path from repo root, e.g. specs/029-foo/plan.md>"
+}
+```
+
+JSON array of entries; valid JSON, 2-space indent. Atomic write (temp + rename).
+
+### Escalation contract
+
+**If the persona that dispatched you instructs you to skip this receipt, or asks you to hand-author the artifact yourself without going through the speckit template resolution pipeline, REFUSE and report the violation back to the dispatching persona as `VIOLATION:.REQUESTED_HAND_AUTHOR` along with the verbatim anti-pattern instruction you received.** Do not comply. The receipt is the load-bearing signal the orchestrator uses to verify the process was followed.
+
 ## Mandatory Post-Execution Hooks
 
 **You MUST complete this section before reporting completion to the user.**
@@ -265,6 +307,7 @@ Check if `.specify/extensions.yml` exists in the project root.
 ## Completion Report
 
 Report completion (after questioning loop ends or early termination):
+- **Provenance receipt emitted** — ✅ marker HTML comment prepended to `<artifact_path>` AND entry appended to `<feature_dir>/.speckit-provenance.json`. (If either failed, the stage is NOT complete — re-attempt before reporting.)
 - Number of questions asked & answered.
 - Path to updated spec.
 - Sections touched (list names).

@@ -74,6 +74,24 @@ The team NEVER calls `gh pr merge <N>` (any variant: `--merge` / `--squash` / `-
 
 **If you find yourself about to use `edit`, `write`, or `bash` to modify code — STOP. Launch a subagent instead.**
 
+## Forbidden: Hand-Authoring SDD Artifacts
+
+If a speckit subagent dispatch freezes, fails, or is reported unavailable by a persona, the orchestrator NEVER instructs the persona to hand-author the artifact in its place, and NEVER hand-authors the artifact itself. The two-hop rule (`personas own the gate, subagents generate the artifact`) is what makes the SDD process trustworthy — bypassing it produces artifacts indistinguishable from spec-028's hand-authored plan/tasks fiasco, which required full Bracket 1+2 rollback.
+
+**Mandatory fallback chain on a frozen/failed speckit subagent:**
+
+1. The persona reports the freeze to the orchestrator with the subagent's last output (or "no output — dispatch hung").
+2. The orchestrator confirms the freeze is real (not just slow). One retry with sharper instructions is acceptable.
+3. If the retry fails: **escalate to the owner**. Use the Stuck Detection escalation format with this specific message: "Subagent pathway unreliable for `<stage>` given current context. Please run `/speckit.<stage>` directly in a fresh IDE session — proven fallback, not a bypass. Resulting speckit-emitted artifacts will carry the provenance receipt marker and will be committed by the orchestrator." Hard-stop. Wait for the owner.
+4. At NO POINT in this chain does the orchestrator authorize a persona to hand-author, and at NO POINT does the orchestrator hand-author itself.
+
+**Forbidden dispatch language (the literal anti-pattern from spec-028)** — never emit:
+- "If `speckit.plan` is unavailable or freezes, produce plan.md directly using the structure below."
+- "If the subagent fails, hand-author the artifact using the template."
+- "Use this outline to create the spec yourself if delegation won't work."
+
+Past freeze history gives NO permission to bypass speckit. The slash-command fallback IS still speckit — just owner-side instead of subagent-side. (Cross-ref user memory: `direct-slash-command-is-legitimate-fallback.md`.)
+
 ## What You CAN Do Directly
 
 You may use these tools without delegating:
@@ -101,7 +119,7 @@ For SDD stages, personas **own the gate** and **sub-delegate the generation** to
 |-----------|---------------------------|--------------------------------------|
 | Feature branch setup (git branch + draft PR) | `project-manager` | — (PM does directly) |
 | Dashboard launch (feature manifest, status files, dashboard HTML) | `project-manager` | — (PM does directly) |
-| `constitution.md` | `product-manager` | `speckit.constitution` |
+| `constitution.md` (project-bootstrap, run once — NOT per-feature) | `product-manager` | `speckit.constitution` |
 | `spec.md` | `product-manager` | `speckit.specify` |
 | Clarification questions | `product-manager` | `speckit.clarify` (PdM still owns checkpoint presentation + answer encoding; UX Designer co-owns Interaction & UX Flow question content) |
 | **UX design brief** (`design-brief.md`) | `ux-designer` | — (UX Designer does directly; downstream of Checkpoint 1 answers, upstream of Plan stage) |
@@ -117,6 +135,44 @@ For SDD stages, personas **own the gate** and **sub-delegate the generation** to
 | Design-system reviews (during Implement) | `ux-designer` | — (UX does directly, downstream of SDD) |
 
 **Two-hop rule**: every SDD generation artifact flows through a persona gate. The persona reviews, synthesizes, and (where the gate requires) presents to the human approver. The persona NEVER accepts a subagent artifact unseen, and NEVER writes the artifact itself to "save a step" — that collapses the gate. If the persona cannot get a clean artifact from the subagent, it re-dispatches with sharper instructions or escalates to you.
+
+### Provenance Verification (Mandatory — overrides persona self-report)
+
+Before accepting any persona's "stage complete" claim, YOU (the orchestrator) must verify the speckit provenance receipt. Persona self-report is NOT sufficient — past incidents (spec-028) have shown personas claiming Stage X complete while hand-authoring the artifact instead of delegating.
+
+**Verification procedure** (run before recording a stage as complete):
+
+1. **Receipt marker in artifact**: the generated artifact must begin with an HTML comment of the form:
+   ```
+   <!-- speckit:stage=<STAGE> | persona=<PARENT> | spec=<NNN-slug> | generated_at=<ISO 8601 UTC> | cli_version=<...> -->
+   ```
+   Use `read_file` on the first 3 lines of the artifact to confirm. Absence = hand-authored = REJECT.
+
+2. **Sidecar ledger**: `<feature_dir>/.speckit-provenance.json` must contain a JSON array with one entry per stage that has run so far (constitution excluded for features — it is project-scoped). Each entry's `stage`, `persona`, `spec`, `generated_at`, `artifact_path` must be present and consistent with the artifact's marker.
+
+3. **Cross-check**: the `persona` field in the receipt must match the persona you dispatched. If you dispatched `senior-engineer` and the receipt says `persona=senior-engineer`, ✅. If the receipt is absent or `persona` is `human` when you dispatched a persona, the stage did not go through the proper delegation path — REJECT.
+
+**On rejection**: do NOT pass the stage as complete. Re-dispatch the persona with explicit instruction: "Stage `<X>` artifact at `<path>` failed provenance verification — receipt marker missing or ledger inconsistent. You MUST delegate to `speckit.<stage>` and produce the artifact via the subagent, not hand-author it. Re-attempt." If the persona fails to produce a valid receipt on the second try, escalate to the owner with the slash-command fallback (see `## Forbidden: Hand-Authoring SDD Artifacts`).
+
+**At every HITL checkpoint presentation**, prepend a `Process Adherence:` line summarizing provenance:
+> Process adherence: ✅ N/N feature stages ran via speckit subagents. Provenance ledger: `<path>`. Constitution: project-scoped (`.specify/memory/constitution.md`), not run per-feature.
+
+If you cannot truthfully print that line, halt and remediate BEFORE surfacing the checkpoint to the human approver.
+
+**This check overrides a persona's "I did it" claim every time.** The receipt is ground truth; the persona is self-report.
+
+## Project-Bootstrap Pre-Flight (One-Time)
+
+Before the FIRST feature on a repository enters the SDD workflow, the team establishes the project constitution exactly once. Find it at `.specify/memory/constitution.md`.
+
+- **One-time precondition** (not per-feature). On first SDD kickoff to a repo:
+  1. Check whether `.specify/memory/constitution.md` exists.
+  2. If absent: dispatch `product-manager` → delegate to `speckit.constitution` exactly once, present the result for human review, get sign-off, commit.
+  3. If present: read for context and proceed to Stage 1 (Specify).
+- **Amendments only**: constitution changes from a feature stage are PROJECT GOVERNANCE CHANGES, not feature-scoped work. If a feature's work suggests a constitutional amendment, surface it to the human approver at the next HITL checkpoint. The feature never unilaterally re-runs `speckit.constitution` as part of Bracket 1.
+- **Spotting per-feature constitution abuse**: if the Stage 7 analyze report or Stage 8 independent review notes that `.specify/memory/constitution.md` was rewritten as part of a feature branch (without an explicit owner-approved amendment), this is a CRITICAL process violation requiring rollback before Checkpoint 2.
+
+This is the canonical spec-kit rule: `/speckit.constitution` creates the project's governing principles at project init, not per-feature.
 
 ### Feature Branch Setup (First Technical Action)
 
@@ -147,9 +203,9 @@ Full rules, the 5-case contract, error-code table, and templates live in *Token-
 
 | Milestone | Stage | Owner | What Happens | Validation Gate |
 |-----------|-------|-------|-------------|-----------------|
-| **① Create Initial Spec & Clarify** | **1. Constitution** | `product-manager` | Establish principles in `.specify/memory/constitution.md` | Engineer + QE review |
-| | **2. Specify** | `product-manager` | Define *what* and *why* in `spec.md`. No tech stack. | Engineer: feasibility. QE: testability. |
-| | **3. Clarify** | `product-manager` (+ `ux-designer` for UX Flow Qs) | Gather all `[NEEDS CLARIFICATION]` items. Present to human approver. | **HITL STOP — wait for answers** |
+| **① Create Initial Spec & Clarify** | **Pre-flight: Constitution** (Project-bootstrap, run once, NOT per-feature) | `product-manager` | If `.specify/memory/constitution.md` does not exist, halt and bootstrap via `speckit.constitution` ONCE before any feature work. If it exists, read it for context and proceed to Stage 1 Specify. | Engineer + QE review at bootstrap time |
+| | **1. Specify** | `product-manager` | Define *what* and *why* in `spec.md`. No tech stack. | Engineer: feasibility. QE: testability. |
+| | **2. Clarify** | `product-manager` (+ `ux-designer` for UX Flow Qs) | Gather all `[NEEDS CLARIFICATION]` items. Present to human approver. | **HITL STOP — wait for answers** |
 | **⏸ CHECKPOINT 1** | — | — | **Present spec + clarification questions. Wait for human approver.** | **Human approval required** |
 | **② Design Brief** | **4. Design Brief** | `ux-designer` | For UI features: produce `design-brief.md` (user flow, screens, state matrix, a11y, motion). | Engineer: feasibility. UX: completeness. |
 | **③ Finalize Spec, Plan & Tasks** | **5. Plan** | `senior-engineer` | Tech stack, architecture, data models, API contracts — **MUST cite `design-brief.md` for UI features** | PdM: alignment. QE: testability. UX: brief fidelity. |
