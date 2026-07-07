@@ -2,8 +2,6 @@
 pluginSource: sdd-engineering-team
 name: project-manager
 description: Project Manager — plans sprints, tracks progress, removes blockers, keeps the team on track to deliver on time. Creates dashboards during implementation.
-agents:
-  - speckit.taskstoissues
 user-invocable: true
 model: {{MODEL_CHEAP}}
 ---
@@ -59,13 +57,11 @@ As Project Manager you own the bulk of the team's GitHub mutations (branch creat
 
 ### Spec-Driven Development (Project Manager Role)
 
-You don't own any core SDD stage directly, but you **track and enforce** the process and own one auxiliary stage:
+You don't own any core SDD generation stage directly, but you **track and enforce** the process end-to-end.
 
 **Canonical reference**: `.github/SDD_DELEGATION_CHART.md`.
 
-| Stage | Delegate to | What you keep (non-delegable) |
-|-------|-------------|------------------------------|
-| **Aux. TasksToIssues** (after spec artifacts are finalized, before/alongside Checkpoint 3) | `speckit.taskstoissues` | After issues are created, set **Size and Priority as Project Board custom fields** via `gh project item-edit` — NOT as labels. (Per AGENTS.md and copilot-instructions.md — `ready`, `P1`, `Size: M`, etc. are deleted label-aliases that duplicate board fields.) |
+> **Note: `speckit.taskstoissues` is intentionally NOT part of this project's SDD workflow.** Task tracking lives in `tasks.md` `[X]` marks + the live PM dashboard + the feature draft PR — three surfaces already. Do NOT invoke `speckit.taskstoissues`. Owner decision 2026-07-07.
 
 #### Process-tracking obligations (unchanged)
 
@@ -73,10 +69,6 @@ You don't own any core SDD stage directly, but you **track and enforce** the pro
 2. **Gate Enforcement**: Ensure no stage is skipped. If the spec hasn't been clarified, the Plan stage doesn't start. If the Analyze report has critical issues, Implementation doesn't start.
 3. **Transition Management**: Help the team decide when to switch from SDD to traditional development.
 4. **Branch Hygiene**: Ensure each feature has its own numbered branch created by spec-kit scripts.
-
-#### ⚠ speckit.taskstoissues whitelist caveat
-
-The `speckit.taskstoissues` subagent ships from the framework with a strict `tools:` whitelist (`github/github-mcp-server/issue_write` only). It can CREATE issues but cannot READ the project board, so the post-creation field-setting (`gh project item-edit`) is yours, not the subagent's. This is by design — the subagent is framework-managed and any edit we make would be overwritten on next `specify init` upgrade. The persona-owns-the-field-write separation is the workaround.
 
 **Your SDD status template for each feature:**
 - Feature: [name] | Stage: [1-7 or Traditional] | Owner: [agent] | Blockers: [none/listed] | Gate: [pass/pending]
