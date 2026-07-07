@@ -129,8 +129,9 @@ For SDD stages, personas **own the gate** and **sub-delegate the generation** to
 | `plan.md` | `senior-engineer` | `speckit.plan` |
 | `tasks.md` | `senior-engineer` | `speckit.tasks` |
 | Implementation code | `implementation-engineer` | `speckit.implement` (may sub-delegate bugs to `debugger`) |
-| Tasks → GitHub issues | `project-manager` | `speckit.taskstoissues` (PM sets Size/Priority as board fields after) |
 | Test files, test execution | `quality-engineer` | — (QE does directly, downstream of SDD) |
+
+> **Note: `speckit.taskstoissues` is intentionally NOT in the active SDD workflow for this project.** Tasks live in `tasks.md` (with `[X]` atomic marks), the live PM dashboard (`scripts/pm-dashboard-loop.ps1` reading `.github/status/agents/*.json`), and the feature draft PR — three tracking surfaces already. Creating a GitHub Issue per `TXXX` would triple-track with no cross-sync. The `speckit.taskstoissues` subagent definition is retained at `agents/speckit/taskstoissues.agent.md` for spec-kit framework compatibility but is not invoked. Owner decision 2026-07-07. |
 | Browser validation | `qa-analyst` | — (QA does directly, downstream of SDD) |
 | Design-system reviews (during Implement) | `ux-designer` | — (UX does directly, downstream of SDD) |
 

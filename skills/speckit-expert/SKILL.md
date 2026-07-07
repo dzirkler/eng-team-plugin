@@ -1,7 +1,7 @@
 ---
 pluginSource: sdd-engineering-team
 name: speckit-expert
-description: 'Expert on GitHub Spec Kit (github/spec-kit) — the open-source Spec-Driven Development toolkit. Use when: working with speckit commands (speckit.specify, speckit.plan, speckit.tasks, speckit.implement, speckit.clarify, speckit.analyze, speckit.checklist, speckit.constitution, speckit.taskstoissues); understanding SDD methodology; creating or reviewing specs, plans, or tasks; initializing a specify project; troubleshooting Specify CLI; choosing extensions or presets; explaining spec-driven development concepts.'
+description: 'Expert on GitHub Spec Kit (github/spec-kit) — the open-source Spec-Driven Development toolkit. Use when: working with speckit commands (speckit.specify, speckit.plan, speckit.tasks, speckit.implement, speckit.clarify, speckit.analyze, speckit.checklist, speckit.constitution); understanding SDD methodology; creating or reviewing specs, plans, or tasks; initializing a specify project; troubleshooting Specify CLI; choosing extensions or presets; explaining spec-driven development concepts. (speckit.taskstoissues exists in the framework but is intentionally NOT part of this project\'s workflow — owner decision 2026-07-07.)'
 argument-hint: 'Describe what you need: e.g. "explain the SDD workflow", "help with speckit.plan", "troubleshoot specify init"'
 user-invocable: true
 ---
@@ -19,7 +19,8 @@ Expert guidance on GitHub's [Spec Kit](https://github.com/github/spec-kit) — t
 - Choosing or configuring extensions and presets
 - Troubleshooting Specify CLI issues
 - Writing or updating a project constitution
-- Converting tasks to GitHub issues (`speckit.taskstoissues`)
+
+> **Note on `speckit.taskstoissues`**: This skill documents the canonical spec-kit command set for reference, but this project's active SDD workflow does NOT include `speckit.taskstoissues`. Tasks are tracked via `tasks.md` `[X]` marks + the PM dashboard + the draft PR. See `.github/SDD_DELEGATION_CHART.md`. Owner decision 2026-07-07.
 
 ## The SDD Workflow
 
@@ -42,7 +43,8 @@ idea → constitution → specify → clarify → plan → tasks → analyze →
 | 6 | `speckit.analyze` | All artifacts | Cross-artifact consistency & coverage report | Console/stdout |
 | 7 | `speckit.checklist` | All artifacts | Custom quality checklist | Console/stdout |
 | 8 | `speckit.implement` | `tasks.md` | Working code (executes all tasks) | Source tree |
-| 9 | `speckit.taskstoissues` | `tasks.md` | GitHub issues in the repo | GitHub |
+
+> `speckit.taskstoissues` (step 9 in upstream spec-kit) is intentionally absent from this table — see note above.
 
 ## Spec Directory Structure
 

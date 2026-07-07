@@ -242,7 +242,7 @@ Prepend this HTML comment as the **very first line** of the generated artifact (
 ```
 
 Field substitution:
-- `<STAGE>` — `constitution` | `specify` | `clarify` | `plan` | `tasks` | `analyze` | `checklist` | `implement` | `taskstoissues` (use the stage name matching THIS subagent)
+- `<STAGE>` — `constitution` | `specify` | `clarify` | `plan` | `tasks` | `analyze` | `checklist` | `implement` (use the stage name matching THIS subagent)
 - `<PARENT_PERSONA>` — the persona that dispatched this subagent (`product-manager`, `senior-engineer`, `implementation-engineer`, `quality-engineer`, or `project-manager`). If invoked directly via slash command by the human approver, use `human`.
 - `<NNN-slug>` — the feature directory name (e.g. `029-essence-model`). For project-scoped artifacts (constitution), use `project`.
 - `<generated_at>` — current time in ISO 8601 with `Z` suffix: `(Get-Date).ToUniversalTime().ToString("o")`.

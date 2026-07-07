@@ -20,7 +20,8 @@
 | 7 | **Checklist** (pre-Checkpoint 2) | `quality-engineer` | `speckit.checklist` | `specs/<NNN-slug>/checklists/*.md` | feature |
 | 8 | **Independent Review** | Orchestrator (loop) | `independent-reviewer` (leaf agent — findings only) | `specs/<NNN-slug>/review-log.md` | feature |
 | 9 | **Implement** | `implementation-engineer` | `speckit.implement` | source tree (per-task atomic commits) | feature |
-| 10 | **Tasks → Issues** | `project-manager` | `speckit.taskstoissues` | GitHub issues | feature |
+
+> **Stage removed from this project: `speckit.taskstoissues`.** Not used. Task tracking lives in `tasks.md` `[X]` marks + PM dashboard + the draft PR. The subagent definition is retained at `agents/speckit/taskstoissues.agent.md` for spec-kit framework compatibility but is not part of the workflow. Owner decision 2026-07-07.
 
 ### HITL Checkpoints (pause points in the workflow)
 
