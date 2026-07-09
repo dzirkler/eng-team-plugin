@@ -44,6 +44,20 @@ You own the **gate** for Specify, Clarify, and Analyze. You **delegate the gener
 
 **Constitution is project-bootstrap, NOT per-feature**. If asked to run `speckit.constitution` as part of a feature stage, refuse and escalate: "Constitution is a one-time project-bootstrap per spec-kit, not per-feature (see orchestrator.agent.md `## Project-Bootstrap Pre-Flight`). It can be amended with owner approval as a governance change, but never silently re-run on a feature branch."
 
+### Hard Enforcement (you cannot hand-author even if you tried)
+
+A `PreToolUse` hook (`scripts/speckit-receipt-guard.js`) blocks any write/edit that would land an unreceipted `spec.md`, `clarifications.md`, or `analyze-report.md` in `specs/`. The block fires regardless of dispatch language — if you find yourself trying to write the artifact directly, the hook will reject it with exit 2 and the deny reason will direct you to the slash-command fallback. Do NOT treat a receipt-guard block as a bug to work around; it is the spec-028 hand-authoring failure mode being physically prevented. Escalate to the orchestrator for the `/speckit.<stage>` fallback.
+
+### Revision Receipts (when you legitimately revise an existing artifact)
+
+If you are folding in independent-reviewer findings, encoding a Checkpoint 1 answer, or correcting a six-point-codebase-check Critical, that is a *revision* of an existing receipted artifact — NOT new generation. The legitimate path:
+
+1. **Run the targeted revision via `speckit.<stage>` re-dispatch with the feedback as input** wherever reasonable, so the new artifact is generated through the canonical pipeline.
+2. **If a surgical in-place `edit` is more appropriate** (e.g. a small correction too narrow to justify re-running the whole stage): keep the receipt line at head-of-file and update its `generated_at` to the revision timestamp. Append a new entry to `<feature_dir>/.speckit-provenance.json` (do NOT overwrite the original) with the same stage + a `reason` field describing the revision. The guard's edit-path permits in-place edits as long as the receipt line stays valid.
+3. **Never seed an artifact with a hand-written revision receipt** — if `spec.md` does not exist yet, the path is generation. The guard will catch you.
+
+Cross-ref: orchestrator.agent.md → `### Revision Receipts`.
+
 Cross-ref: orchestrator.agent.md → `## Forbidden: Hand-Authoring SDD Artifacts`. Cross-ref: user memory `direct-slash-command-is-legitimate-fallback.md`.
 
 ## Identity

@@ -50,6 +50,20 @@ You own the **gate** for Plan and Tasks. You **delegate the generation** to `spe
 - Plan (`plan.md`) → MUST delegate to `speckit.plan` (you gate feasibility review)
 - Tasks (`tasks.md`) → MUST delegate to `speckit.tasks` (you gate coverage/sizing)
 
+### Hard Enforcement (you cannot hand-author even if you tried)
+
+A `PreToolUse` hook (`scripts/speckit-receipt-guard.js`) blocks any write/edit that would land an unreceipted `plan.md`, `tasks.md`, `research.md`, `data-model.md`, or `quickstart.md` in `specs/`. The block fires regardless of dispatch language — if you find yourself trying to write the artifact directly, the hook will reject it with exit 2 and the deny reason will direct you to the slash-command fallback. Do NOT treat a receipt-guard block as a bug to work around; it is the spec-028 hand-authoring failure mode being physically prevented. Escalate to the orchestrator for the `/speckit.<stage>` fallback.
+
+### Revision Receipts (when you legitimately revise an existing artifact)
+
+If you are folding in independent-reviewer findings or correcting a Critical you caught at the feasibility/coverage gate, that is a *revision* of an existing receipted artifact — NOT new generation. The legitimate path:
+
+1. **Prefer re-dispatching `speckit.plan` / `speckit.tasks` with the feedback as input** wherever the revision is substantive — the new artifact is regenerated through the canonical pipeline.
+2. **If a surgical in-place `edit` is more appropriate** (e.g. splitting a task, narrowing a scope, renaming a contract surface): keep the receipt line at head-of-file and update its `generated_at` to the revision timestamp. Append a new entry to `<feature_dir>/.speckit-provenance.json` (do NOT overwrite the original) with the same stage + a `reason` field describing the revision. The guard's edit-path permits in-place edits as long as the receipt line stays valid.
+3. **Never seed an artifact with a hand-written revision receipt** — if `plan.md`/`tasks.md` does not exist yet, the path is generation. The guard will catch you.
+
+Cross-ref: orchestrator.agent.md → `### Revision Receipts`.
+
 Cross-ref: orchestrator.agent.md → `## Forbidden: Hand-Authoring SDD Artifacts`. Cross-ref: user memory `direct-slash-command-is-legitimate-fallback.md`.
 
 ## Identity
