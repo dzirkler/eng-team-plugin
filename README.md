@@ -1,9 +1,20 @@
-# SDD Engineering Team — VS Code Agent Plugin
+# SDD Engineering Team — Sync-distributed SDD team plugin
 
-A reusable VS Code Agent Plugin that ships a Spec-Driven Development (SDD)
+A reusable VS Code Agent plugin that ships a Spec-Driven Development (SDD)
 engineering team: one orchestrator plus seven specialist personas (Product,
 Project, Full-Stack Engineer, Quality Engineer, QA Analyst, Debugger, UX
 Designer) and the 11-agent `speckit.*` SDD-generation pipeline.
+
+> **Distribution model.** This plugin is **distributed via the
+> `scripts/sync-agents.ps1` sync script**, not installed as a Claude-format
+> plugin. Consumer repos end up with copies of the agents / skills / scripts
+> / hooks under their own `.github/` tree, with model-tier placeholders
+> resolved and hook paths expanded to absolute consumer-specific paths.
+> The legacy `.claude-plugin/` manifest was removed 2026-07-08 when the team
+> confirmed all consumers use the sync model and none enable Claude-plugin
+> variable expansion in hook command execution (the `${CLAUDE_PLUGIN_ROOT}`
+> token was silently failing to expand, producing `Cannot find module
+> 'D:\scripts\...'` errors).
 
 > **Relationship to Spec Kit:** This plugin **does not bundle** GitHub
 > [Spec Kit](https://github.com/github/spec-kit). It ships:
@@ -22,51 +33,45 @@ Designer) and the 11-agent `speckit.*` SDD-generation pipeline.
 > `speckit.*` SDD-generation chain breaks (its step 1 calls
 > `.specify/scripts/powershell/check-prerequisites.ps1`, which won't exist).
 
-## Install (local path — recommended for single-developer use)
+## Install (sync to consumer repo)
 
-The plugin currently lives at `<this-repo>/plugin/`. Register it once at
-VS Code **user level** so every repo you open picks it up:
+Clone this repo anywhere, then run the sync script against each consuming
+repo. Model-tier placeholders get resolved per-consumer at sync time:
 
-```jsonc
-// Append to: C:\Users\<you>\AppData\Roaming\Code\User\settings.json
-// (macOS: ~/Library/Application Support/Code/User/settings.json)
-// (Linux: ~/.config/Code/User/settings.json)
-{
-  "chat.plugins.enabled": true,
-  "chat.pluginLocations": {
-    "<absolute-path-to-this-repo>/plugin": true
-  }
-}
+```powershell
+pwsh -File <this-repo>/scripts/sync-agents.ps1 `
+  -TargetRoot "D:\code\<consumer-repo>" `
+  -ProjectTag "<consumer-tag>" `
+  -FlagshipModel "<flagship picker name> (customendpoint)" `
+  -CheapModel "<cheap picker name> (customendpoint)" `
+  -IncludeHooks
 ```
 
-Reload VS Code → Extensions view (`Ctrl+Shift+X`) → search `@agentPlugins`
-→ you should see `sdd-engineering-team` listed → enable if not already.
+`-IncludeHooks` auto-enables `-IncludeScripts` (every hook invokes a node
+script under `.github/scripts/`). Other optional switches:
+`-IncludeSpeckit` (11 speckit glue agents), `-IncludeSkills`, `-IncludeMcp`.
 
-To use in a new project repo, no further setup is needed on the same
-machine — just open the project. The 8 personas + 11 `speckit.*` pipeline
-agents will appear in the agent dropdown (Agent mode). The orchestrator
-invokes the speckit agents as subagents; you can also pick any speckit
-agent directly from the dropdown for ad-hoc work.
+The consuming repo ends up with:
+- `.github/agents/*.agent.md` — 8 personas with model placeholders resolved
+- `.github/agents/speckit/*.agent.md` — 11 pipeline agents (if `-IncludeSpeckit`)
+- `.github/hooks/hooks.json` — guard hooks with `{{SCRIPTS_DIR}}` expanded
+- `.github/scripts/*.js`, `*.ps1` — guard scripts + dashboard (sync'd as-is)
+- `.github/skills/` — skills (if `-IncludeSkills`)
+- `.mcp.json` — MCP config (if `-IncludeMcp`)
 
-## Install (marketplace — for distributing to teammates or other machines)
-
-See *Distributing the plugin* at the bottom of this README.
+Idempotent: re-running over an existing sync overwrites with fresh source.
 
 ## Bundle layout
 
-This plugin uses the **Claude format** (`.claude-plugin/plugin.json` at the
-format-specific manifest location) so VS Code expands the `${CLAUDE_PLUGIN_ROOT}`
-token in hook commands and MCP server config. Without that, plugin-provided
-hooks can't reference their own scripts portably.
+See *Install (sync to consumer repo)* above for distribution. Source layout:
 
 | Path | Contents |
 |------|----------|
-| `.claude-plugin/plugin.json` | Plugin manifest (name, pointers to folders below) |
 | `agents/` | 8 persona agents (`*.agent.md`) + `speckit/` subdir with 11 pipeline agents |
 | `skills/` | 14 markdown skills (one `SKILL.md` per directory) |
-| `hooks/hooks.json` | Runtime guardrail hooks (Claude-format location) — see *Two-Layer Receipt Enforcement* below |
+| `hooks/hooks.json` | Runtime guardrail hooks — paths use the `{{SCRIPTS_DIR}}` token, expanded at sync time (`-IncludeHooks`) to the consumer's absolute `.github/scripts/` dir. See *Two-Layer Receipt Enforcement* below. |
 | `.mcp.json` | MCP server config (zai-vision, zai-web-search, playwright) |
-| `scripts/` | Helper scripts (`no-op-guard.js`, `speckit-receipt-guard.js`, `pm-dashboard-loop.ps1`, `.Tests.ps1`) |
+| `scripts/` | Helper scripts (`no-op-guard.js`, `speckit-receipt-guard.js`, `pm-dashboard-loop.ps1`, `.Tests.ps1`, `sync-agents.ps1`) |
 
 ## Two-Layer Receipt Enforcement (spec-028 hardening)
 
@@ -152,17 +157,17 @@ no separate checkout required.
   feature's `tasks.md` parses and that its task count reconciles against
   `feature.json.initialTaskCount`. Exits 0 on success, 2 on empty parse
   (format drift), 3 on count mismatch.
-- **One-liner from chat or terminal:**
+- **One-liner from chat or terminal** (after sync to the consumer repo):
   ```powershell
-  pwsh -NoProfile -File ${CLAUDE_PLUGIN_ROOT}/scripts/pm-dashboard-loop.ps1 -SelfTest -RepoRoot .
+  pwsh -NoProfile -File .github/scripts/pm-dashboard-loop.ps1 -SelfTest -RepoRoot .
   ```
-  (When invoked through a Claude-format plugin hook, `${CLAUDE_PLUGIN_ROOT}`
-  is set automatically; for ad-hoc PowerShell calls, substitute the
-  absolute path to the plugin's `scripts/` directory.)
+  The path is the consumer's in-repo copy under `.github/scripts/`, not a
+  plugin install location. Always pass `-RepoRoot` if cwd at launch might
+  differ from the consumer repo root.
 
-The orchestrator and project-manager personas reference the script via
-`${CLAUDE_PLUGIN_ROOT}/scripts/pm-dashboard-loop.ps1`, which both VS Code
-and Claude Code expand to the plugin's install location at runtime.
+The orchestrator and project-manager personas reference the script via the
+in-repo path `.github/scripts/pm-dashboard-loop.ps1`, resolved against the
+workspace root.
 
 ## What the plugin expects your repo to provide
 
@@ -214,50 +219,21 @@ versus your own repo-scoped customizations when diffing or upgrading.
    (treats the service as unavailable) — the rest of the workflow is
    unaffected.
 
-5. **Dashboard script ships with the plugin.** `scripts/pm-dashboard-loop.ps1`
-   (plus its Pester regression tests) lives in the plugin. The orchestrator
-   and PM personas reference it via the `${CLAUDE_PLUGIN_ROOT}` token, which
-   VS Code expands at runtime to the plugin's install location. Pass your
-   consuming repo's path via `-RepoRoot` if the cwd-at-launch differs.
+5. **Dashboard script lives in the consumer repo.** `scripts/pm-dashboard-loop.ps1`
+   (plus its Pester regression tests) is sync'd to the consumer's
+   `.github/scripts/` directory by `-IncludeScripts`. The orchestrator and
+   PM personas invoke it via the in-repo path
+   `.github/scripts/pm-dashboard-loop.ps1`. Pass your consuming repo's path
+   via `-RepoRoot` if the cwd-at-launch differs.
 
-## Distributing the plugin
+## Distributing updates
 
-When you're ready to share with teammates or other machines:
-
-1. **Move `plugin/` to its own Git repo.** From this repo's root:
-   ```powershell
-   # Create new repo D:\code\eng-team-plugin
-   git mv plugin D:\code\eng-team-plugin\
-   cd D:\code\eng-team-plugin
-   git init && git add . && git commit -m "Initial plugin"
-   git remote add origin git@github.com:<you>/eng-team-plugin.git
-   git push -u origin main
-   ```
-
-2. **Add a marketplace catalog.** Two options:
-
-   - **Bundled marketplace (simplest):** create
-     `.claude-plugin/marketplace.json` in the same repo with `source: "./"`
-     pointing at the plugin root. Consumers install with:
-     ```
-     /plugin marketplace add <you>/eng-team-plugin
-     /plugin install sdd-engineering-team@<you>-eng-team-plugin
-     ```
-
-   - **Separate marketplace repo:** create a second repo (e.g.
-     `<you>/copilot-plugins`) whose `.claude-plugin/marketplace.json`
-     references `eng-team-plugin` as a `github` source. Lets you ship
-     multiple plugins from one marketplace.
-
-3. **Update `plugin.json` `version`** on every meaningful change so the
-   auto-updater picks it up.
-
-4. **Remove the local `chat.pluginLocations` entry** from your user
-   settings (since you'll install from the marketplace instead).
-
-> The plugin format is the same one VS Code, GitHub Copilot CLI, and
-> Claude Code share — the same `eng-team-plugin` repo works across all
-> three tools without modification.
+To roll a new plugin source change out to existing consumer repos, re-run
+the sync script from step *Install (sync to consumer repo)* against each
+consumer repo. The sync is idempotent — it always overwrites from the
+plugin source, so there is no incremental-merge risk and no in-place
+consumer-side state that needs preserving. Bump the version in the
+commit message of the plugin repo so consumers can see what landed when.
 
 ## License
 

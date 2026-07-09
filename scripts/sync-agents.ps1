@@ -24,22 +24,24 @@
 # Optional footprint switches (default: persona agents only):
 #   -IncludeSpeckit   also copies agents/speckit/* (the speckit.* glue agents)
 #   -IncludeSkills    also copies skills/*
-#   -IncludeHooks     also copies hooks/hooks.json. Auto-enables -IncludeScripts
-#                     because every entry in hooks.json references a script at
-#                     ${CLAUDE_PLUGIN_ROOT}/scripts/*.js (no-op-guard.js,
-#                     speckit-receipt-guard.js) — installing the hooks without
-#                     the scripts they invoke produces dead hooks.
+#   -IncludeHooks     also copies hooks/hooks.json (with {{SCRIPTS_DIR}} tokens
+#                     expanded to the consumer's absolute scripts dir at sync
+#                     time). Auto-enables -IncludeScripts because every entry
+#                     in hooks.json invokes a node script under .github/scripts/
+#                     (no-op-guard.js, speckit-receipt-guard.js) — installing
+#                     the hooks without the scripts they invoke produces
+#                     dead hooks that crash at every PreToolUse event.
 #   -IncludeMcp       also copies .mcp.json (NOTE: does not inject secrets —
 #                     the target's own env vars / .vscode/settings.json still
 #                     supply ${ZAI_API_KEY} etc. at runtime)
 #   -IncludeScripts   also copies scripts/* — REQUIRED for any consumer that
 #                     runs the Stage-7 dashboard (pm-dashboard-loop.ps1 is
-#                     referenced by the orchestrator + project-manager
-#                     personas via ${CLAUDE_PLUGIN_ROOT}/scripts/... and
-#                     will be unresolvable at runtime without this). Also
-#                     ships the guard hooks (no-op-guard.js,
-#                     speckit-receipt-guard.js — referenced by hooks.json)
-#                     and the dashboard's Pester regression suite.
+#                     invoked by the orchestrator + project-manager personas
+#                     via .github/scripts/pm-dashboard-loop.ps1 and will be
+#                     unresolvable at runtime without this). Also ships the
+#                     guard hooks (no-op-guard.js, speckit-receipt-guard.js
+#                     — invoked by hooks.json) and the dashboard's Pester
+#                     regression suite.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -122,7 +124,7 @@ function Copy-PersonaAgent($sourceFile, $destFile) {
 
 # --- Switch implication: -IncludeHooks implies -IncludeScripts.
 # --- Every entry in hooks.json invokes a node script at
-# --- ${CLAUDE_PLUGIN_ROOT}/scripts/ (no-op-guard.js, speckit-receipt-guard.js).
+# --- <consumer>/.github/scripts/ (no-op-guard.js, speckit-receipt-guard.js).
 # --- Shipping the hooks without the scripts they invoke produces dead hooks
 # --- that fail at every PreToolUse event, so this isn't optional — we silently
 # --- promote. The header doc above documents this behavior; the now-
@@ -217,32 +219,52 @@ if ($IncludeSkills) {
 }
 
 # --- Optional: hooks/hooks.json
-# --- NOTE: hooks.json references ${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js
-# --- AND ${CLAUDE_PLUGIN_ROOT}/scripts/speckit-receipt-guard.js at runtime.
+# --- hooks.json sources from this plugin use the {{SCRIPTS_DIR}} token where
+# --- the consumer's absolute scripts path belongs. The token is NOT a runtime
+# --- variable — it does not depend on ${CLAUDE_PLUGIN_ROOT} or ${REPO_ROOT}
+# --- (neither expands reliably in VS Code Copilot chat-subagent hook
+# --- execution; both produce "Cannot find module 'D:\scripts\...'" errors
+# --- when cwd-resolution goes wrong, per the 2026-07-08 incident on
+# --- ai-character-manager-v3). Instead sync-agents.ps1 statically expands
+# --- {{SCRIPTS_DIR}} to the consumer's absolute scripts path with forward
+# --- slashes, which node accepts on Windows. The result is a hooks.json
+# --- with concrete absolute paths, no runtime variable expansion needed.
+# ---
 # --- The -IncludeHooks switch auto-promotes -IncludeScripts (see the
 # --- implication block above), so by this point $IncludeScripts is always
 # --- true when $IncludeHooks is. The defensive warning below is retained
-# --- for the case where implicit promotion is ever removed/relaxed in a
-# --- future change — it names BOTH guard scripts so the diagnostic stays
-# --- accurate even if the source wiring evolves.
+# --- for the case where implicit promotion is ever removed/relaxed.
 if ($IncludeHooks) {
     $sourceHooks = Join-Path $pluginRoot "hooks\hooks.json"
     $targetHooksDir = Join-Path $TargetRoot ".github\hooks"
     if (Test-Path $sourceHooks) {
         Write-Host ""
         if (-not $IncludeScripts) {
-            Write-Host "WARNING: -IncludeHooks without -IncludeScripts — hooks.json references" -ForegroundColor Yellow
-            Write-Host "         `${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js and" -ForegroundColor Yellow
-            Write-Host "         `${CLAUDE_PLUGIN_ROOT}/scripts/speckit-receipt-guard.js, neither of which" -ForegroundColor Yellow
-            Write-Host "         will exist at runtime unless -IncludeScripts is also passed. Recommend also passing -IncludeScripts." -ForegroundColor Yellow
+            Write-Host "WARNING: -IncludeHooks without -IncludeScripts — hooks.json invokes" -ForegroundColor Yellow
+            Write-Host "         no-op-guard.js and speckit-receipt-guard.js, neither of which" -ForegroundColor Yellow
+            Write-Host "         will exist at runtime unless -IncludeScripts is also passed." -ForegroundColor Yellow
         }
+
+        # Compute the absolute scripts dir the consumer's hooks should invoke.
+        # Forward-slash form: node accepts forward slashes on Windows, and the
+        # resulting hooks.json file content is shell-portable (no backslash
+        # escaping headaches in JSON).
+        $targetScriptsDir = (Join-Path $TargetRoot ".github\scripts")
+        $scriptsDirFwd = $targetScriptsDir -replace '\\', '/'
+
+        # Read source, expand the {{SCRIPTS_DIR}} token, write atomically.
+        $hooksContent = Get-Content -Path $sourceHooks -Raw -Encoding UTF8
+        $hooksExpanded = $hooksContent.Replace('{{SCRIPTS_DIR}}', $scriptsDirFwd)
+
         $dest = Join-Path $targetHooksDir "hooks.json"
         if ($DryRun) {
-            Write-Host "  [dry-run] would copy: $dest"
+            Write-Host "  [dry-run] would write: $dest  ({{SCRIPTS_DIR}} -> $scriptsDirFwd)"
         } else {
             if (-not (Test-Path $targetHooksDir)) { New-Item -ItemType Directory -Path $targetHooksDir -Force | Out-Null }
-            Copy-Item -Path $sourceHooks -Destination $dest -Force
-            Write-Host "  wrote: $dest"
+            $tempFile = "$dest.tmp"
+            $hooksExpanded | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
+            Move-Item -Path $tempFile -Destination $dest -Force
+            Write-Host "  wrote: $dest  ({{SCRIPTS_DIR}} -> $scriptsDirFwd)"
         }
     }
 }

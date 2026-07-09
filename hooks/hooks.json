@@ -1,4 +1,5 @@
 {
+  "_comment": "Paths use a placeholder token (written as SCRIPTS_DIR between doublecurly braces in the plugin source) which sync-agents.ps1 replaces with the consumer's absolute scripts dir at install time. The result is concrete absolute paths with no runtime variable expansion needed (no CLAUDE_PLUGIN_ROOT or REPO_ROOT that fail to expand in VS Code Copilot chat-subagent hook execution).",
   "hooks": {
     "PreToolUse": [
       {
@@ -6,11 +7,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js\" orchestrator"
+            "command": "node \"{{SCRIPTS_DIR}}/no-op-guard.js\" orchestrator"
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/speckit-receipt-guard.js\""
+            "command": "node \"{{SCRIPTS_DIR}}/speckit-receipt-guard.js\""
           }
         ]
       },
@@ -19,11 +20,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js\" debugger"
+            "command": "node \"{{SCRIPTS_DIR}}/no-op-guard.js\" debugger"
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js\" qa-analyst"
+            "command": "node \"{{SCRIPTS_DIR}}/no-op-guard.js\" qa-analyst"
           }
         ]
       }
@@ -33,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js\" session-end"
+            "command": "node \"{{SCRIPTS_DIR}}/no-op-guard.js\" session-end"
           }
         ]
       }
@@ -43,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js\" subagent-stop"
+            "command": "node \"{{SCRIPTS_DIR}}/no-op-guard.js\" subagent-stop"
           }
         ]
       }

@@ -291,9 +291,9 @@ Total dispatch count for Stage 9 should be roughly *(# of dependency chains in t
 
 During the Implement stage, delegate to `project-manager` to launch a live dashboard so the human approver can monitor progress in real-time:
 
-1. **Project Manager** → create feature manifest at `.github/status/feature.json` with agent assignments and task breakdown. The `initialTaskCount` field **MUST equal** the result of `pwsh -NoProfile -File ${CLAUDE_PLUGIN_ROOT}/scripts/pm-dashboard-loop.ps1 -SelfTest -RepoRoot <consumer-repo-root>` (the parser's report). Pass `-RepoRoot` whenever the cwd-at-launch differs from the consumer repo root (the norm when this script ships in a plugin). Never hand-count.
+1. **Project Manager** → create feature manifest at `.github/status/feature.json` with agent assignments and task breakdown. The `initialTaskCount` field **MUST equal** the result of `pwsh -NoProfile -File .github/scripts/pm-dashboard-loop.ps1 -SelfTest -RepoRoot <consumer-repo-root>` (the parser's report). Pass `-RepoRoot` whenever the cwd-at-launch differs from the consumer repo root (the norm when this script ships in a plugin). Never hand-count.
 2. **Project Manager** → run the `-SelfTest` gate once more AFTER manifest write; nonzero exit (2 = empty parse, 3 = count mismatch) blockers the dashboard launch. Fix the format mismatch or extend the parser before proceeding.
-3. **Project Manager** → start the dashboard monitor by running `${CLAUDE_PLUGIN_ROOT}/scripts/pm-dashboard-loop.ps1 -RepoRoot <consumer-repo-root>` as a background process (when invoking ad-hoc from chat, pass `-RepoRoot` if cwd differs from the consumer repo root)
+3. **Project Manager** → start the dashboard monitor by running `.github/scripts/pm-dashboard-loop.ps1 -RepoRoot <consumer-repo-root>` as a background process (when invoking ad-hoc from chat, pass `-RepoRoot` if cwd differs from the consumer repo root)
 4. **Project Manager returns the dashboard file path** (`.github/status/dashboard.html`)
 5. **Implementation Engineer(s)** → implement assigned tasks, write status to `.github/status/agents/engineer-{n}.json`
 6. **QE (if applicable)** → test tasks, write status to `.github/status/agents/qe-{n}.json`
