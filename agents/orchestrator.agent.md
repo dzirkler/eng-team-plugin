@@ -162,6 +162,35 @@ If you cannot truthfully print that line, halt and remediate BEFORE surfacing th
 
 **This check overrides a persona's "I did it" claim every time.** The receipt is ground truth; the persona is self-report.
 
+### Hard Enforcement Layer (`speckit-receipt-guard.js`)
+
+The receipt check above is layered defence — the outer (cognitive) layer. The **inner (runtime) layer** is a `PreToolUse` hook at `scripts/speckit-receipt-guard.js`, registered in `hooks/hooks.json` against the `edit|write` matchers. It blocks any write/edit to a known speckit-artifact path (`specs/*/spec.md`, `clarifications.md`, `analyze-report.md`, `plan.md`, `tasks.md`, `research.md`, `data-model.md`, `quickstart.md`, `review-log.md`) when the new file content does NOT begin with a valid `<!-- speckit:stage=... -->` receipt line. `design-brief.md` is excluded — UX Designer produces that one directly, not via a speckit subagent.
+
+**This means the spec-028 hand-authoring failure mode is now structurally impossible, not merely forbidden.** A persona that "forgets" the two-hop rule will get a hard `exit 2` block from the hook before the unreceipted file can land. The deny reason points the persona at the slash-command fallback, so a freeze stays a one-step escalation to you rather than turning into a hand-authored substitute.
+
+You do not interact with this hook directly — it runs opaquely below your dispatches. You only need to know it exists so that:
+
+1. When a persona reports "I tried to write `<artifact>` and got a receipt-guard block," that is the hook working as designed. Do NOT authorize them to bypass it; do NOT write the artifact yourself (you would get the same block). Escalate to the owner for the `/speckit.<stage>` slash-command fallback per `## Forbidden: Hand-Authoring SDD Artifacts`.
+2. When you see a pre-existing artifact WITHOUT a receipt marker (e.g. an older spec authored before the hook shipped) the hook does not retroactively fire on read; it only blocks new writes. Flag the un-receipted artifact as a process-adherence finding in your next checkpoint presentation.
+
+### Revision Receipts (legitimate in-place edits to speckit artifacts)
+
+Sometimes a persona legitimately needs to revise an artifact that already passed initial generation — typically to fold in independent-reviewer findings (Stage 8), address a feasibility-gate concern, or correct a six-point-codebase-check Critical finding. The provenance model treats these as **revisions**, not hand-authoring — they extend the receipt chain rather than break it.
+
+**When a persona revises a speckit artifact in place:**
+
+1. **The receipt line stays at head-of-file.** The original generation receipt is NOT stripped. The persona updates the `generated_at` field on the existing receipt line (and optionally the `persona` field if the reviser differs from the generator) to reflect the revision timestamp. This is the load-bearing field the orchestrator's ledger check compares against mtime.
+2. **A NEW ledger entry is appended** to `<feature_dir>/.speckit-provenance.json`, NOT overwriting the original. Same JSON shape as the original generation entry, but populated with the revision's:
+   - `stage`: same stage name (e.g. `"plan"`)
+   - `persona`: the revising persona (may equal or differ from the originator)
+   - `generated_at`: the revision timestamp (matches the file's updated receipt line)
+   - `artifact_path`: same path
+3. **Optional `reason` field on revisions** (recommended for non-trivial revisions): a short note in the ledger entry explaining why a revision occurred — e.g. `"reason": "Stage-8 independent review F-3: split T014 into T014a/T014b"`. This lets the orchestrator and the owner distinguish between a routine re-dispatch and a substantive revision without having to diff the artifacts themselves.
+
+**The guard hook's edit-path tolerates this.** A `replace_string_in_file` call that touches body content of an already-receipted file is allowed through; only an edit that *replaces the receipt line with un-receipted content* is blocked. The revising persona is expected to use `replace_string_in_file` to update the `generated_at` token on the existing receipt line as part of the revision — that update keeps the head-of-file a valid receipt.
+
+**What this is NOT a license for.** A revision is for surgical correction after speckit generation has happened. If the artifact does not yet exist, the path is generation, not revision — speckit must run first. The receipt guard will block any attempt to "seed" an artifact with a hand-written revision receipt (the persona did not run speckit, so they have no `cli_version` value to honestly fill, and the receipt would be falsified).
+
 ## Project-Bootstrap Pre-Flight (One-Time)
 
 Before the FIRST feature on a repository enters the SDD workflow, the team establishes the project constitution exactly once. Find it at `.specify/memory/constitution.md`.

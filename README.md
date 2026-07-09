@@ -64,9 +64,44 @@ hooks can't reference their own scripts portably.
 | `.claude-plugin/plugin.json` | Plugin manifest (name, pointers to folders below) |
 | `agents/` | 8 persona agents (`*.agent.md`) + `speckit/` subdir with 11 pipeline agents |
 | `skills/` | 14 markdown skills (one `SKILL.md` per directory) |
-| `hooks/hooks.json` | Runtime guardrail hooks (Claude-format location) |
+| `hooks/hooks.json` | Runtime guardrail hooks (Claude-format location) — see *Two-Layer Receipt Enforcement* below |
 | `.mcp.json` | MCP server config (zai-vision, zai-web-search, playwright) |
-| `scripts/` | Helper scripts (`no-op-guard.js`, `pm-dashboard-loop.ps1`, `.Tests.ps1`) |
+| `scripts/` | Helper scripts (`no-op-guard.js`, `speckit-receipt-guard.js`, `pm-dashboard-loop.ps1`, `.Tests.ps1`) |
+
+## Two-Layer Receipt Enforcement (spec-028 hardening)
+
+This plugin enforces the speckit-provenance discipline at TWO layers — the
+cognitive layer (persona + orchestrator judgement) is the outer defenence;
+the runtime layer (PreToolUse hook) is the inner safety net. Spec-028 showed
+that the cognitive layer alone is unreliable: a frozen subagent dispatch + a
+well-intentioned persona + a permissive orchestrator produced hand-authored
+artifacts indistinguishable from real speckit output and required full
+Bracket 1+2 rollback.
+
+**Outer layer (cognitive):** every persona with SDD-stage ownership (`PdM`,
+`senior-engineer`, `quality-engineer`, `implementation-engineer`) carries a
+refuse-and-escalate clause telling it to NEVER hand-author a speckit
+artifact, even if the orchestrator authorizes it. The orchestrator then
+verifies the receipt marker on every accepted artifact before recording a
+stage complete (see `orchestrator.agent.md` → *Provenance Verification*).
+
+**Inner layer (runtime):** `scripts/speckit-receipt-guard.js` runs at
+`PreToolUse` on `edit|write` against any path matching `specs/*/<artifact>`
+where `<artifact>` ∈ {`spec.md`, `clarifications.md`, `analyze-report.md`,
+`plan.md`, `tasks.md`, `research.md`, `data-model.md`, `quickstart.md`,
+`review-log.md`}. If the new file content does not begin with a valid
+`<!-- speckit:stage=... -->` receipt line, the write is blocked with exit 2
+and the deny reason directs the persona to the legitimate fallback path.
+`design-brief.md` is excluded — UX Designer produces that one directly.
+
+**Revision protocol:** legitimate in-place edits to an already-receipted
+artifact (e.g. folding in independent-reviewer findings) keep the receipt
+line at head-of-file with an updated `generated_at`, and append a new entry
+to `<feature_dir>/.speckit-provenance.json` (with an optional `reason`
+field). See `orchestrator.agent.md` → *Revision Receipts*.
+
+To debug the guard, set `SDD_GUARD_DEBUG=1` and read `.sdd-guard.log` in the
+plugin root.
 
 ## Optional integrations
 
