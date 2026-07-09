@@ -24,9 +24,11 @@
 # Optional footprint switches (default: persona agents only):
 #   -IncludeSpeckit   also copies agents/speckit/* (the speckit.* glue agents)
 #   -IncludeSkills    also copies skills/*
-#   -IncludeHooks     also copies hooks/hooks.json (REQUIRES -IncludeScripts
-#                     if you also want the referenced no-op-guard.js to land
-#                     at ${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js)
+#   -IncludeHooks     also copies hooks/hooks.json. Auto-enables -IncludeScripts
+#                     because every entry in hooks.json references a script at
+#                     ${CLAUDE_PLUGIN_ROOT}/scripts/*.js (no-op-guard.js,
+#                     speckit-receipt-guard.js) — installing the hooks without
+#                     the scripts they invoke produces dead hooks.
 #   -IncludeMcp       also copies .mcp.json (NOTE: does not inject secrets —
 #                     the target's own env vars / .vscode/settings.json still
 #                     supply ${ZAI_API_KEY} etc. at runtime)
@@ -35,8 +37,9 @@
 #                     referenced by the orchestrator + project-manager
 #                     personas via ${CLAUDE_PLUGIN_ROOT}/scripts/... and
 #                     will be unresolvable at runtime without this). Also
-#                     ships no-op-guard.js (referenced by hooks.json) and
-#                     the dashboard's Pester regression suite.
+#                     ships the guard hooks (no-op-guard.js,
+#                     speckit-receipt-guard.js — referenced by hooks.json)
+#                     and the dashboard's Pester regression suite.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -115,6 +118,19 @@ function Copy-PersonaAgent($sourceFile, $destFile) {
     $injected | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
     Move-Item -Path $tempFile -Destination $destFile -Force
     Write-Host "  wrote: $destFile"
+}
+
+# --- Switch implication: -IncludeHooks implies -IncludeScripts.
+# --- Every entry in hooks.json invokes a node script at
+# --- ${CLAUDE_PLUGIN_ROOT}/scripts/ (no-op-guard.js, speckit-receipt-guard.js).
+# --- Shipping the hooks without the scripts they invoke produces dead hooks
+# --- that fail at every PreToolUse event, so this isn't optional — we silently
+# --- promote. The header doc above documents this behavior; the now-
+# --- unreachable defensive warning below still calls out the missing-scripts
+# --- case in case dependency wiring changes in the future.
+if ($IncludeHooks -and -not $IncludeScripts) {
+    Write-Host "Auto-promoting: -IncludeHooks implies -IncludeScripts (hooks.json invokes scripts/*.js at runtime)." -ForegroundColor DarkGray
+    $IncludeScripts = $true
 }
 
 Write-Host "Syncing persona agents -> $targetAgentsDir"
@@ -202,10 +218,13 @@ if ($IncludeSkills) {
 
 # --- Optional: hooks/hooks.json
 # --- NOTE: hooks.json references ${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js
-# --- at runtime. That node script will be unresolvable unless the consumer
-# --- also passes -IncludeScripts (or otherwise installs no-op-guard.js at
-# --- <plugin-root>/scripts/). We warn here rather than hard-fail because
-# --- some consumers may supply no-op-guard.js from a different source.
+# --- AND ${CLAUDE_PLUGIN_ROOT}/scripts/speckit-receipt-guard.js at runtime.
+# --- The -IncludeHooks switch auto-promotes -IncludeScripts (see the
+# --- implication block above), so by this point $IncludeScripts is always
+# --- true when $IncludeHooks is. The defensive warning below is retained
+# --- for the case where implicit promotion is ever removed/relaxed in a
+# --- future change — it names BOTH guard scripts so the diagnostic stays
+# --- accurate even if the source wiring evolves.
 if ($IncludeHooks) {
     $sourceHooks = Join-Path $pluginRoot "hooks\hooks.json"
     $targetHooksDir = Join-Path $TargetRoot ".github\hooks"
@@ -213,8 +232,9 @@ if ($IncludeHooks) {
         Write-Host ""
         if (-not $IncludeScripts) {
             Write-Host "WARNING: -IncludeHooks without -IncludeScripts — hooks.json references" -ForegroundColor Yellow
-            Write-Host "         `${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js which will not exist at runtime" -ForegroundColor Yellow
-            Write-Host "         unless no-op-guard.js is supplied separately. Recommend also passing -IncludeScripts." -ForegroundColor Yellow
+            Write-Host "         `${CLAUDE_PLUGIN_ROOT}/scripts/no-op-guard.js and" -ForegroundColor Yellow
+            Write-Host "         `${CLAUDE_PLUGIN_ROOT}/scripts/speckit-receipt-guard.js, neither of which" -ForegroundColor Yellow
+            Write-Host "         will exist at runtime unless -IncludeScripts is also passed. Recommend also passing -IncludeScripts." -ForegroundColor Yellow
         }
         $dest = Join-Path $targetHooksDir "hooks.json"
         if ($DryRun) {
