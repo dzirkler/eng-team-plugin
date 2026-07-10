@@ -135,7 +135,18 @@ feature's tasks.md, never hand-counted**. See "Dashboard Creation" §1 below.
 
 ## Dashboard Creation (Stage 9 — Mandatory)
 
-During the Implement stage, you create and maintain a live dashboard:
+During the Implement stage, you create and maintain a live dashboard.
+
+### ⚠️ Rote-task discipline (read before step 1)
+
+The dashboard launch is a **rote file-and-process task**: write one manifest file, run a self-test gate, start a background monitor, report a path. It is not an analysis task, not an architecture review, not a sprint-planning exercise. **Execute the steps below linearly and return. Do not:**
+
+- Investigate the codebase, review prior specs, or produce architectural commentary — none of it is needed to write `feature.json`.
+- Produce mermaid diagrams, gantt charts, or "phased unblocking plans" — the orchestrator asked for a dashboard, not a recovery plan.
+- Reference file paths or modules from memory or prior features — if you need to confirm a path, `read` it; do not assert it from recollection (cheap-tier recollection produces plausible-but-fabricated paths, observed on spec-030).
+- Narrate what you are about to do — just do it and return the path.
+
+**If you notice yourself wanting to write about something other than the four launch steps, that impulse is the failure mode.** Stop, re-read the four steps, and execute only those. On spec-030 (2026-07-10) the PM persona produced a full hallucinated analysis of an unrelated shipped feature + fabricated file paths on this exact task, and then went silent on narrowed retries. The orchestrator's standing policy is now to degrade this task to `implementation-engineer` after one PM failure — so a clean first execution is the difference between owning the task and losing it.
 
 1. **Create the feature manifest** at `.github/status/feature.json` with agent assignments and task breakdown. The manifest's `initialTaskCount` field **MUST be the count of tasks the parser will recognize in tasks.md**, NOT a hand-counted estimate. To get this value, run the dashboard's built-in self-test before writing it: `pwsh -NoProfile -File .github/scripts/pm-dashboard-loop.ps1 -SelfTest -RepoRoot <consumer-repo-root>` parses the tasks.md, prints phase/task counts, and exits 0 on success. Use the reported `Total tasks` line as `initialTaskCount`. Pass `-RepoRoot` whenever the cwd-at-launch differs from the consumer repo root (the norm when this script ships in a plugin). Do NOT proceed if `-SelfTest` returns nonzero:
    - **exit 2** → parser saw 0 tasks/0 phases (tasks.md format drift — fix the header format OR extend the parser first; do not ship a dashboard that can never render tasks).
