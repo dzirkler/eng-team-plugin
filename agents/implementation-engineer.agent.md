@@ -6,7 +6,7 @@ agents:
   - debugger
   - speckit.implement
 user-invocable: true
-model: {{MODEL_FLAGSHIP}}
+model: {{MODEL_COMPETENT}}
 ---
 
 # Implementation Engineer

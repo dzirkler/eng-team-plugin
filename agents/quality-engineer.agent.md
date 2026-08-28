@@ -5,7 +5,7 @@ description: Software Tester / SDET / Quality Engineer — flagship-tier persona
 agents:
   - speckit.checklist
 user-invocable: true
-model: {{MODEL_FLAGSHIP}}
+model: {{MODEL_COMPETENT}}
 ---
 
 # Software Tester / SDET / Quality Engineer

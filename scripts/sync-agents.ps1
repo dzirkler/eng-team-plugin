@@ -6,8 +6,8 @@
 # "GLM-4.7 (myproject) (customendpoint)"), not a raw model id. A single
 # shared user-level plugin can't carry different per-project model names, so
 # each consuming project gets its OWN copy of the persona agent files, with
-# the {{MODEL_FLAGSHIP}} / {{MODEL_CHEAP}} placeholders in this plugin's
-# source agents resolved to that project's qualified names.
+# the {{MODEL_FLAGSHIP}} / {{MODEL_COMPETENT}} / {{MODEL_CHEAP}} placeholders
+# in this plugin's source agents resolved to that project's qualified names.
 #
 # Idempotent: safe to re-run on every plugin update — it always copies fresh
 # from the plugin source and re-injects the two placeholders; it never reads
@@ -19,7 +19,8 @@
 #     -TargetRoot "C:\code\myproject" `
 #     -ProjectTag "myproject" `
 #     -FlagshipModel "GLM-5.2 (myproject) (customendpoint)" `
-#     -CheapModel "GLM-4.7 (myproject) (customendpoint)"
+#     -CompetentModel "GLM-4.7 (myproject) (customendpoint)" `
+#     -CheapModel "GLM-4.6 (myproject) (customendpoint)"
 #
 # Optional footprint switches (default: persona agents only):
 #   -IncludeSpeckit   also copies agents/speckit/* (the speckit.* glue agents)
@@ -54,6 +55,9 @@ param(
     [string]$FlagshipModel,
 
     [Parameter(Mandatory = $true)]
+    [string]$CompetentModel,
+
+    [Parameter(Mandatory = $true)]
     [string]$CheapModel,
 
     [switch]$IncludeSpeckit,
@@ -81,7 +85,7 @@ if (-not (Test-Path $TargetRoot)) {
 # Sanity: qualified model names should reference the project tag and the
 # customendpoint vendor, per V2-Plan-Revisions.md §3. This is a soft warning,
 # not a hard failure — some deployments may use a different vendor/format.
-foreach ($pair in @(@{ Label = "FlagshipModel"; Value = $FlagshipModel }, @{ Label = "CheapModel"; Value = $CheapModel })) {
+foreach ($pair in @(@{ Label = "FlagshipModel"; Value = $FlagshipModel }, @{ Label = "CompetentModel"; Value = $CompetentModel }, @{ Label = "CheapModel"; Value = $CheapModel })) {
     if ($pair.Value -notmatch [regex]::Escape($ProjectTag)) {
         Write-Host "WARNING: $($pair.Label) ('$($pair.Value)') does not contain ProjectTag ('$ProjectTag') — verify this is the correct qualified picker name for this project." -ForegroundColor Yellow
     }
@@ -97,13 +101,13 @@ $targetAgentsDir = Join-Path $TargetRoot ".github\agents"
 
     Reads one plugin-source agent file, injects the two model-tier
     placeholders, and writes it to the target. Injection is a plain string
-    replace — {{MODEL_FLAGSHIP}} / {{MODEL_CHEAP}} are literal tokens in the
-    source frontmatter, never partial/regex matches, so this is safe and
-    exact.
+    replace — {{MODEL_FLAGSHIP}} / {{MODEL_COMPETENT}} / {{MODEL_CHEAP}} are
+    literal tokens in the source frontmatter, never partial/regex matches, so
+    this is safe and exact.
 #>
 function Copy-PersonaAgent($sourceFile, $destFile) {
     $content = Get-Content -Path $sourceFile -Raw -Encoding UTF8
-    $injected = $content.Replace('{{MODEL_FLAGSHIP}}', $FlagshipModel).Replace('{{MODEL_CHEAP}}', $CheapModel)
+    $injected = $content.Replace('{{MODEL_FLAGSHIP}}', $FlagshipModel).Replace('{{MODEL_COMPETENT}}', $CompetentModel).Replace('{{MODEL_CHEAP}}', $CheapModel)
 
     if ($DryRun) {
         Write-Host "  [dry-run] would write: $destFile"
@@ -138,12 +142,13 @@ if ($IncludeHooks -and -not $IncludeScripts) {
 Write-Host "Syncing persona agents -> $targetAgentsDir"
 Write-Host "  Project tag:     $ProjectTag"
 Write-Host "  Flagship model:  $FlagshipModel"
+Write-Host "  Competent model: $CompetentModel"
 Write-Host "  Cheap model:     $CheapModel"
 Write-Host ""
 
 # --- Required footprint: all persona agent files (agents/*.agent.md, NOT
 # --- the agents/speckit/ subfolder, which is optional glue). Persona files
-# --- are the ones that carry {{MODEL_FLAGSHIP}}/{{MODEL_CHEAP}} placeholders.
+# --- are the ones that carry {{MODEL_FLAGSHIP}}/{{MODEL_COMPETENT}}/{{MODEL_CHEAP}} placeholders.
 $personaFiles = Get-ChildItem -Path $sourceAgentsDir -Filter "*.agent.md" -File
 if ($personaFiles.Count -eq 0) {
     throw "No persona agent files found in $sourceAgentsDir"

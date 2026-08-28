@@ -2,7 +2,7 @@
 pluginSource: sdd-engineering-team
 name: debugger
 description: Investigates and diagnoses bugs, test failures, and unexpected behavior. Produces root cause analysis and regression tests. Does NOT implement fixes — hands off to the Engineer.
-model: {{MODEL_FLAGSHIP}}
+model: {{MODEL_COMPETENT}}
 user-invocable: true
 ---
 

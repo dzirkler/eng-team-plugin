@@ -3,7 +3,7 @@ pluginSource: sdd-engineering-team
 name: independent-reviewer
 description: Fresh-eyes review of SDD spec artifacts (spec, plan, tasks, analyze report) before Checkpoint 2. Finds gaps, inconsistencies, and areas to reconsider. Does NOT write artifacts — hands findings back to the owning persona.
 user-invocable: true
-model: {{MODEL_FLAGSHIP}}
+model: {{MODEL_COMPETENT}}
 ---
 
 # Independent Reviewer
